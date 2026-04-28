@@ -17,6 +17,8 @@ type ScenarioId =
   | "cheap"
   | "goodnight"
   | "idle"
+  | "away"
+  | "home"
   | "reset";
 
 type Weather = "clear" | "storm" | "smoky" | "night";
@@ -45,6 +47,8 @@ type AuraState = {
   alarmArmed: boolean;
   vacuumActive: boolean;
   outlets: { kitchen: boolean; bedroom: boolean; garage: boolean };
+  personPresent: boolean;
+  personWalking: boolean;
   toast: string | null;
 };
 
@@ -70,6 +74,8 @@ const RESET_STATE: AuraState = {
   alarmArmed: false,
   vacuumActive: false,
   outlets: { kitchen: true, bedroom: true, garage: false },
+  personPresent: true,
+  personWalking: false,
   toast: null,
 };
 
@@ -240,6 +246,58 @@ const SCENARIOS: Record<
     }),
     toast: "AURA: home is idle — powering down devices to save energy.",
   },
+  away: {
+    label: "Not Home",
+    blurb: "Empty house — vacuum + charging while you're out",
+    icon: AwayIcon,
+    apply: (s) => ({
+      ...s,
+      airQuality: "good",
+      waterStatus: "flowing",
+      leakRoom: null,
+      personPresent: false,
+      personWalking: false,
+      lightsBrightness: 0,
+      tvOn: false,
+      blindsClosed: true,
+      doorLocked: true,
+      alarmArmed: true,
+      vacuumActive: true,
+      airPurifierSpeed: 1,
+      batteryCharging: true,
+      evCharging: false,
+      exteriorLights: false,
+      thermostatF: 76,
+      totalPowerKw: 0.6,
+    }),
+    toast: "AURA: away mode — house secured, vacuum cleaning, battery charging.",
+  },
+  home: {
+    label: "I'm Home",
+    blurb: "Walking in — lights and car follow",
+    icon: HomeIcon,
+    apply: (s) => ({
+      ...s,
+      airQuality: "good",
+      waterStatus: "flowing",
+      leakRoom: null,
+      personPresent: true,
+      personWalking: true,
+      lightsBrightness: 0,
+      tvOn: false,
+      blindsClosed: false,
+      doorLocked: false,
+      alarmArmed: false,
+      vacuumActive: false,
+      airPurifierSpeed: 1,
+      batteryCharging: false,
+      evCharging: false,
+      exteriorLights: false,
+      thermostatF: 72,
+      totalPowerKw: 0.4,
+    }),
+    toast: "AURA: welcome home — opening up.",
+  },
 };
 
 // ---------- Page ------------------------------------------------------------
@@ -250,8 +308,15 @@ export default function Page() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [viewTab, setViewTab] = useState<"floorplan" | "devices" | "stats" | "simple">("floorplan");
   const [ipadMode, setIpadMode] = useState(false);
+  const sequenceTimeouts = useRef<number[]>([]);
+
+  function clearSequence() {
+    sequenceTimeouts.current.forEach((id) => window.clearTimeout(id));
+    sequenceTimeouts.current = [];
+  }
 
   function runScenario(id: ScenarioId) {
+    clearSequence();
     if (id === "reset") {
       setState({ ...RESET_STATE, toast: "AURA: returning to defaults." });
       scheduleToastClear();
@@ -260,6 +325,33 @@ export default function Page() {
     const def = SCENARIOS[id];
     setState((prev) => ({ ...def.apply(prev), scenario: id, toast: def.toast }));
     scheduleToastClear();
+
+    if (id === "home") {
+      sequenceTimeouts.current.push(
+        window.setTimeout(() => {
+          setState((s) => ({
+            ...s,
+            lightsBrightness: 80,
+            tvOn: true,
+            toast: "AURA: lights on, TV resuming.",
+          }));
+          scheduleToastClear();
+        }, 2800),
+      );
+      sequenceTimeouts.current.push(
+        window.setTimeout(() => {
+          setState((s) => ({
+            ...s,
+            evCharging: true,
+            batteryCharging: true,
+            personWalking: false,
+            totalPowerKw: 7.4,
+            toast: "AURA: car plugged in, charging.",
+          }));
+          scheduleToastClear();
+        }, 4600),
+      );
+    }
   }
 
   function scheduleToastClear() {
@@ -448,6 +540,8 @@ function BottomBar({
     { id: "cheap", label: SCENARIOS.cheap.label, blurb: SCENARIOS.cheap.blurb, icon: SCENARIOS.cheap.icon },
     { id: "goodnight", label: SCENARIOS.goodnight.label, blurb: SCENARIOS.goodnight.blurb, icon: SCENARIOS.goodnight.icon },
     { id: "idle", label: SCENARIOS.idle.label, blurb: SCENARIOS.idle.blurb, icon: SCENARIOS.idle.icon },
+    { id: "away", label: SCENARIOS.away.label, blurb: SCENARIOS.away.blurb, icon: SCENARIOS.away.icon },
+    { id: "home", label: SCENARIOS.home.label, blurb: SCENARIOS.home.blurb, icon: SCENARIOS.home.icon },
     { id: "reset", label: "Reset", blurb: "Default neutral state", icon: ResetIcon },
   ];
 
@@ -783,6 +877,8 @@ function FloorPlan({ state, flicker }: { state: AuraState; flicker: boolean }) {
         <TV x={272} y={580} on={state.tvOn} />
         {/* Robot vacuum + dock */}
         <Vacuum active={state.vacuumActive} />
+        {/* Person — appears when home, animates in from car when arriving */}
+        <Person present={state.personPresent} walking={state.personWalking} />
 
         {/* Kitchen */}
         <g>
@@ -1454,6 +1550,52 @@ function TV({ x, y, on }: { x: number; y: number; on: boolean }) {
       <rect x="56" y="14" width="8" height="3" fill="#3D4D6A" />
       <rect x="44" y="17" width="32" height="2" rx="1" fill="#3D4D6A" />
     </g>
+  );
+}
+
+function Person({ present, walking }: { present: boolean; walking: boolean }) {
+  // Walk path: from car (right side, outside) → driveway → into living room
+  const pathX = [820, 820, 740, 660, 580, 520, 460, 400, 360];
+  const pathY = [680, 660, 645, 645, 640, 605, 560, 525, 500];
+  const finalX = pathX[pathX.length - 1];
+  const finalY = pathY[pathY.length - 1];
+
+  const visible = present || walking;
+
+  return (
+    <motion.g
+      initial={false}
+      animate={
+        walking
+          ? { x: pathX, y: pathY, opacity: 1 }
+          : { x: finalX, y: finalY, opacity: visible ? 1 : 0 }
+      }
+      transition={
+        walking
+          ? { duration: 4.2, ease: "easeInOut", times: [0, 0.05, 0.2, 0.4, 0.55, 0.7, 0.82, 0.92, 1] }
+          : { duration: 0.6, ease: "easeOut" }
+      }
+    >
+      {/* Subtle ground shadow */}
+      <ellipse cx="0" cy="20" rx="7" ry="2" fill="#0B1220" opacity="0.35" />
+      {/* Head */}
+      <circle r="5" cy="-9" fill="#FFE9B0" stroke="#A89870" strokeWidth="0.8" />
+      {/* Body */}
+      <rect x="-5" y="-4" width="10" height="14" rx="3" fill="#5BA8E8" stroke="#1F2A40" strokeWidth="0.6" />
+      {/* Legs — sway when walking */}
+      <motion.g
+        animate={walking ? { rotate: [0, 10, -10, 10, -10, 0] } : { rotate: 0 }}
+        transition={
+          walking
+            ? { duration: 0.55, repeat: Infinity, ease: "easeInOut" }
+            : { duration: 0.2 }
+        }
+        style={{ transformOrigin: "0px 10px" }}
+      >
+        <line x1="-2.5" y1="10" x2="-2.5" y2="18" stroke="#3D4D6A" strokeWidth="2.5" strokeLinecap="round" />
+        <line x1="2.5" y1="10" x2="2.5" y2="18" stroke="#3D4D6A" strokeWidth="2.5" strokeLinecap="round" />
+      </motion.g>
+    </motion.g>
   );
 }
 
@@ -2894,9 +3036,17 @@ function parseCommand(
     runScenario("goodnight");
     return "Goodnight — locking down.";
   }
-  if (/idle|away|nobody home|no one home|out of (the )?house/.test(t)) {
+  if (/idle|nobody home(?! mode)|no one home(?! mode)/.test(t)) {
     runScenario("idle");
     return "Idle mode — powering down.";
+  }
+  if (/^away|not home|leaving|going out|heading out/.test(t)) {
+    runScenario("away");
+    return "Away mode — securing the home.";
+  }
+  if (/i'?m home|welcome home|i am home|coming home|just got home/.test(t)) {
+    runScenario("home");
+    return "Welcome home.";
   }
   if (/^reset|default.*state|start over/.test(t)) {
     runScenario("reset");
@@ -3088,6 +3238,24 @@ function TabletIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4">
       <rect x="5" y="3" width="14" height="18" rx="2" />
       <line x1="11" y1="18" x2="13" y2="18" />
+    </svg>
+  );
+}
+
+function AwayIcon(cls: string = "size-4") {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>
+      <path d="M9 21H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+function HomeIcon(cls: string = "size-4") {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>
+      <path d="M3 11l9-8 9 8v9a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z" />
     </svg>
   );
 }

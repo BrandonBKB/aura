@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 /* =========================================================================
@@ -237,6 +237,7 @@ const SCENARIOS: Record<
 export default function Page() {
   const [state, setState] = useState<AuraState>(RESET_STATE);
   const [flicker, setFlicker] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   function runScenario(id: ScenarioId) {
     if (id === "reset") {
@@ -266,7 +267,7 @@ export default function Page() {
 
   return (
     <main className="flex flex-col h-screen w-full overflow-hidden">
-      <TopBar state={state} />
+      <TopBar state={state} onOpenPanel={() => setPanelOpen(true)} />
 
       <section className="flex-1 min-h-0 flex items-center justify-center px-4 sm:px-8 py-4">
         <div className="w-full h-full max-w-[1400px] flex items-center justify-center">
@@ -275,6 +276,14 @@ export default function Page() {
       </section>
 
       <BottomBar active={state.scenario} onPick={runScenario} />
+
+      <DevicePanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        state={state}
+        setState={setState}
+        runScenario={runScenario}
+      />
 
       <AnimatePresence>
         {state.toast && (
@@ -297,7 +306,7 @@ export default function Page() {
 
 // ---------- Top bar ---------------------------------------------------------
 
-function TopBar({ state }: { state: AuraState }) {
+function TopBar({ state, onOpenPanel }: { state: AuraState; onOpenPanel: () => void }) {
   const weatherLabel: Record<Weather, string> = {
     clear: "Clear · 74°F",
     storm: "Storm · 61°F",
@@ -328,6 +337,13 @@ function TopBar({ state }: { state: AuraState }) {
           color="mint"
           mono
         />
+        <button
+          onClick={onOpenPanel}
+          className="ml-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-[#1F2A40] bg-[#0F1A30] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] transition-colors flex items-center gap-1.5"
+        >
+          <span className="size-1.5 rounded-full bg-[#5EE2C6]" />
+          Devices
+        </button>
       </div>
     </header>
   );
@@ -1420,6 +1436,519 @@ function Tree({ x, y, small }: { x: number; y: number; small?: boolean }) {
       <circle r={r * 0.6} cx={-r * 0.3} cy={-r * 0.3} fill="#4F7A57" opacity="0.6" />
     </g>
   );
+}
+
+// ---------- Device panel + voice chat ---------------------------------------
+
+function DevicePanel({
+  open,
+  onClose,
+  state,
+  setState,
+  runScenario,
+}: {
+  open: boolean;
+  onClose: () => void;
+  state: AuraState;
+  setState: React.Dispatch<React.SetStateAction<AuraState>>;
+  runScenario: (id: ScenarioId) => void;
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            key="backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+          />
+          <motion.aside
+            key="panel"
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ duration: 0.32, ease: [0.6, 0, 0.2, 1] }}
+            className="fixed top-0 right-0 h-full w-full sm:max-w-[420px] bg-[#0B1220] border-l border-[#1F2A40] z-50 flex flex-col shadow-2xl"
+          >
+            <header className="h-[60px] px-4 flex items-center justify-between border-b border-[#1F2A40] shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="size-2 rounded-full bg-[#5EE2C6] shadow-[0_0_8px_#5EE2C6]" />
+                <h2 className="font-semibold text-sm tracking-wide">Devices</h2>
+              </div>
+              <button
+                onClick={onClose}
+                className="size-8 rounded-lg border border-[#1F2A40] hover:border-[#5EE2C6] text-[#8A98B3] hover:text-[#5EE2C6] transition-colors flex items-center justify-center"
+                aria-label="Close panel"
+              >
+                ×
+              </button>
+            </header>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              <DeviceCard
+                title="Climate"
+                value={`${state.thermostatF}°F`}
+                subtitle={state.thermostatF >= 74 ? "Cooling" : state.thermostatF >= 68 ? "Comfort" : "Eco"}
+              >
+                <div className="flex gap-1.5">
+                  <PanelBtn
+                    onClick={() =>
+                      setState((s) => ({ ...s, thermostatF: Math.max(60, s.thermostatF - 1) }))
+                    }
+                  >
+                    −
+                  </PanelBtn>
+                  <PanelBtn
+                    onClick={() =>
+                      setState((s) => ({ ...s, thermostatF: Math.min(85, s.thermostatF + 1) }))
+                    }
+                  >
+                    +
+                  </PanelBtn>
+                </div>
+              </DeviceCard>
+
+              <DeviceCard
+                title="Lights"
+                value={`${state.lightsBrightness}%`}
+                subtitle={state.lightsBrightness === 0 ? "Off" : "On"}
+              >
+                <div className="flex gap-1.5">
+                  <PanelBtn
+                    onClick={() =>
+                      setState((s) => ({ ...s, lightsBrightness: Math.max(0, s.lightsBrightness - 10) }))
+                    }
+                  >
+                    −
+                  </PanelBtn>
+                  <PanelBtn
+                    onClick={() =>
+                      setState((s) => ({ ...s, lightsBrightness: Math.min(100, s.lightsBrightness + 10) }))
+                    }
+                  >
+                    +
+                  </PanelBtn>
+                </div>
+              </DeviceCard>
+
+              <DeviceCard
+                title="Shades"
+                value={state.blindsClosed ? "Closed" : "Open"}
+                subtitle="All windows"
+              >
+                <PanelToggle
+                  on={!state.blindsClosed}
+                  onClick={() => setState((s) => ({ ...s, blindsClosed: !s.blindsClosed }))}
+                />
+              </DeviceCard>
+
+              <DeviceCard
+                title="Entertainment"
+                value={state.tvOn ? "On" : "Off"}
+                subtitle="Living room TV"
+              >
+                <PanelToggle
+                  on={state.tvOn}
+                  onClick={() => setState((s) => ({ ...s, tvOn: !s.tvOn }))}
+                />
+              </DeviceCard>
+
+              <DeviceCard
+                title="Air"
+                value={state.airQuality === "good" ? "AQI 28" : "AQI 162"}
+                subtitle={
+                  state.airPurifierSpeed === 0
+                    ? "Purifier off"
+                    : state.airPurifierSpeed >= 2
+                    ? "Purifier high"
+                    : "Purifier low"
+                }
+                amber={state.airQuality !== "good"}
+              />
+
+              <DeviceCard
+                title="Battery"
+                value={`${state.batteryLevel}%`}
+                subtitle={state.batteryCharging ? "Charging" : "Idle"}
+                amber={state.batteryLevel < 25}
+              >
+                <div className="w-16 h-2 rounded-full bg-[#1F2A40] overflow-hidden">
+                  <div
+                    className="h-full bg-[#5EE2C6] transition-all duration-500"
+                    style={{ width: `${state.batteryLevel}%` }}
+                  />
+                </div>
+              </DeviceCard>
+            </div>
+
+            <VoiceChat state={state} setState={setState} runScenario={runScenario} />
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function DeviceCard({
+  title,
+  value,
+  subtitle,
+  amber,
+  children,
+}: {
+  title: string;
+  value: string;
+  subtitle?: string;
+  amber?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="px-3 py-2.5 rounded-xl border border-[#1F2A40] bg-[#0F1A30] flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-[11px] uppercase tracking-wider text-[#8A98B3]">{title}</div>
+        <div className="flex items-baseline gap-2">
+          <div
+            className={`text-base font-semibold ${
+              amber ? "text-[#F5B544]" : "text-[#E6ECF5]"
+            }`}
+          >
+            {value}
+          </div>
+          {subtitle && <div className="text-xs text-[#8A98B3] truncate">{subtitle}</div>}
+        </div>
+      </div>
+      {children && <div className="shrink-0">{children}</div>}
+    </div>
+  );
+}
+
+function PanelBtn({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="size-8 rounded-lg border border-[#1F2A40] bg-[#0B1220] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] transition-colors text-sm font-medium"
+    >
+      {children}
+    </button>
+  );
+}
+
+function PanelToggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`relative w-12 h-6 rounded-full transition-colors ${
+        on ? "bg-[#5EE2C6]" : "bg-[#1F2A40]"
+      }`}
+      aria-pressed={on}
+    >
+      <span
+        className={`absolute top-0.5 size-5 rounded-full bg-[#0B1220] transition-transform ${
+          on ? "translate-x-6" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+}
+
+function VoiceChat({
+  state,
+  setState,
+  runScenario,
+}: {
+  state: AuraState;
+  setState: React.Dispatch<React.SetStateAction<AuraState>>;
+  runScenario: (id: ScenarioId) => void;
+}) {
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [history, setHistory] = useState<{ from: "user" | "aura"; text: string }[]>([
+    { from: "aura", text: "Hi — try 'lights off', 'goodnight', or 'set to 70 degrees'." },
+  ]);
+  const [textInput, setTextInput] = useState("");
+  const [supported, setSupported] = useState(true);
+  const recognitionRef = useRef<unknown>(null);
+  const transcriptRef = useRef("");
+
+  useEffect(() => {
+    transcriptRef.current = transcript;
+  }, [transcript]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const SR =
+      (window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown })
+        .SpeechRecognition ??
+      (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
+    if (!SR) {
+      setSupported(false);
+      return;
+    }
+    const Ctor = SR as new () => {
+      continuous: boolean;
+      interimResults: boolean;
+      lang: string;
+      onresult: (e: { results: { 0: { transcript: string } }[] & { length: number } }) => void;
+      onend: () => void;
+      onerror: () => void;
+      start: () => void;
+      abort: () => void;
+    };
+    const rec = new Ctor();
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+    rec.onresult = (event) => {
+      let t = "";
+      for (let i = 0; i < event.results.length; i++) {
+        t += event.results[i][0].transcript;
+      }
+      setTranscript(t);
+    };
+    rec.onend = () => {
+      setListening(false);
+      const final = transcriptRef.current.trim();
+      if (final) {
+        submit(final);
+        setTranscript("");
+      }
+    };
+    rec.onerror = () => setListening(false);
+    recognitionRef.current = rec;
+    return () => {
+      try {
+        rec.abort();
+      } catch {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function startListening() {
+    const rec = recognitionRef.current as { start: () => void } | null;
+    if (!rec) return;
+    setTranscript("");
+    setListening(true);
+    try {
+      rec.start();
+    } catch {
+      setListening(false);
+    }
+  }
+
+  function stopListening() {
+    const rec = recognitionRef.current as { abort: () => void } | null;
+    if (!rec) return;
+    try {
+      rec.abort();
+    } catch {}
+    setListening(false);
+  }
+
+  function submit(text: string) {
+    const reply = parseCommand(text, state, setState, runScenario);
+    setHistory((h) => [...h.slice(-6), { from: "user", text }, { from: "aura", text: reply }]);
+  }
+
+  function onTextSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const v = textInput.trim();
+    if (!v) return;
+    submit(v);
+    setTextInput("");
+  }
+
+  return (
+    <div className="border-t border-[#1F2A40] shrink-0 flex flex-col">
+      <div className="px-3 py-2 max-h-44 overflow-y-auto space-y-1.5">
+        {history.map((m, i) => (
+          <div
+            key={i}
+            className={`text-xs leading-snug ${
+              m.from === "user" ? "text-[#E6ECF5]" : "text-[#5EE2C6]"
+            }`}
+          >
+            <span className="text-[#5A6A85] mr-1.5">
+              {m.from === "user" ? "you" : "aura"}
+            </span>
+            {m.text}
+          </div>
+        ))}
+        {listening && transcript && (
+          <div className="text-xs leading-snug text-[#8A98B3] italic">
+            <span className="text-[#5A6A85] mr-1.5">you</span>
+            {transcript}
+          </div>
+        )}
+      </div>
+      <form
+        onSubmit={onTextSubmit}
+        className="border-t border-[#1F2A40] p-2.5 flex items-center gap-2"
+      >
+        {supported && (
+          <button
+            type="button"
+            onClick={listening ? stopListening : startListening}
+            className={`size-9 shrink-0 rounded-lg border flex items-center justify-center transition-colors ${
+              listening
+                ? "border-[#FF6B7A] bg-[#1A0E10] text-[#FF6B7A]"
+                : "border-[#1F2A40] bg-[#0F1A30] text-[#5EE2C6] hover:border-[#5EE2C6]"
+            }`}
+            aria-label={listening ? "Stop listening" : "Start listening"}
+          >
+            {listening ? (
+              <span className="size-2 rounded-full bg-[#FF6B7A] animate-pulse" />
+            ) : (
+              <MicIcon />
+            )}
+          </button>
+        )}
+        <input
+          value={textInput}
+          onChange={(e) => setTextInput(e.target.value)}
+          placeholder={
+            supported ? "Speak or type a command…" : "Type a command (mic not supported)…"
+          }
+          className="flex-1 bg-[#0F1A30] border border-[#1F2A40] rounded-lg px-3 py-2 text-sm text-[#E6ECF5] placeholder:text-[#5A6A85] focus:outline-none focus:border-[#5EE2C6]"
+        />
+        <button
+          type="submit"
+          className="px-3 py-2 rounded-lg border border-[#1F2A40] bg-[#0F1A30] text-[#5EE2C6] hover:border-[#5EE2C6] text-sm font-medium"
+        >
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4">
+      <rect x="9" y="2" width="6" height="12" rx="3" />
+      <path d="M5 11a7 7 0 0 0 14 0" />
+      <line x1="12" y1="18" x2="12" y2="22" />
+    </svg>
+  );
+}
+
+function parseCommand(
+  raw: string,
+  state: AuraState,
+  setState: React.Dispatch<React.SetStateAction<AuraState>>,
+  runScenario: (id: ScenarioId) => void,
+): string {
+  const t = raw.toLowerCase().trim();
+
+  // Scenarios
+  if (/(super\s+)?sunny|sun mode/.test(t)) {
+    runScenario("sunny");
+    return "Switching to Super Sunny.";
+  }
+  if (/storm|rain mode|incoming weather/.test(t)) {
+    runScenario("storm");
+    return "Storm mode — sealing the home.";
+  }
+  if (/bad air|smoke|smoky|aqi|air quality/.test(t)) {
+    runScenario("badair");
+    return "Sealing windows, purifier on high.";
+  }
+  if (/leak|water shutoff|shut off water|water emergency/.test(t)) {
+    runScenario("leak");
+    return "Water shut off, alert raised.";
+  }
+  if (/cheap energy|off.?peak|charge mode/.test(t)) {
+    runScenario("cheap");
+    return "Charging on cheap energy.";
+  }
+  if (/good\s?night|bedtime|sleep mode/.test(t)) {
+    runScenario("goodnight");
+    return "Goodnight — locking down.";
+  }
+  if (/idle|away|nobody home|no one home|out of (the )?house/.test(t)) {
+    runScenario("idle");
+    return "Idle mode — powering down.";
+  }
+  if (/^reset|default.*state|start over/.test(t)) {
+    runScenario("reset");
+    return "Reset to defaults.";
+  }
+
+  // Lights
+  if (/(lights?|lamps?)\b.*(off|out)|turn off (the )?lights?|kill the lights?/.test(t)) {
+    setState((s) => ({ ...s, lightsBrightness: 0 }));
+    return "Lights off.";
+  }
+  if (/(lights?|lamps?)\b.*on|turn on (the )?lights?/.test(t)) {
+    setState((s) => ({ ...s, lightsBrightness: 80 }));
+    return "Lights on at 80%.";
+  }
+  if (/dim|darker/.test(t)) {
+    let next = 0;
+    setState((s) => {
+      next = Math.max(0, s.lightsBrightness - 20);
+      return { ...s, lightsBrightness: next };
+    });
+    return "Dimming lights.";
+  }
+  if (/brighten|brighter|more light/.test(t)) {
+    let next = 0;
+    setState((s) => {
+      next = Math.min(100, s.lightsBrightness + 20);
+      return { ...s, lightsBrightness: next };
+    });
+    return "Brightening lights.";
+  }
+
+  // Blinds / shades
+  if (/(close|shut|drop).*(blinds?|shades?)/.test(t)) {
+    setState((s) => ({ ...s, blindsClosed: true }));
+    return "Closing blinds.";
+  }
+  if (/(open|raise|lift).*(blinds?|shades?)/.test(t)) {
+    setState((s) => ({ ...s, blindsClosed: false }));
+    return "Opening blinds.";
+  }
+
+  // TV
+  if (/(tv|television)\b.*off|turn off (the )?(tv|television)/.test(t)) {
+    setState((s) => ({ ...s, tvOn: false }));
+    return "TV off.";
+  }
+  if (/(tv|television)\b.*on|turn on (the )?(tv|television)/.test(t)) {
+    setState((s) => ({ ...s, tvOn: true }));
+    return "TV on.";
+  }
+
+  // Thermostat — explicit number
+  const tempMatch = t.match(/(\d{2,3})\s*(?:degrees?|°|f|fahrenheit)?/);
+  const wantsTemp = /thermostat|temperature|temp\b|degree|cooler|warmer|set to/.test(t);
+  if (wantsTemp && tempMatch) {
+    const v = parseInt(tempMatch[1], 10);
+    if (v >= 55 && v <= 90) {
+      setState((s) => ({ ...s, thermostatF: v }));
+      return `Setting thermostat to ${v}°F.`;
+    }
+  }
+  if (/warmer|warm up|too cold|heat up/.test(t)) {
+    setState((s) => ({ ...s, thermostatF: Math.min(85, s.thermostatF + 2) }));
+    return "Warming up 2°F.";
+  }
+  if (/cooler|cool down|too hot/.test(t)) {
+    setState((s) => ({ ...s, thermostatF: Math.max(60, s.thermostatF - 2) }));
+    return "Cooling 2°F.";
+  }
+
+  return "Sorry, I didn't catch that. Try 'lights off', 'goodnight', or 'sunny mode'.";
 }
 
 // ---------- Button icons ----------------------------------------------------

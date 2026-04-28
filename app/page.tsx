@@ -305,7 +305,7 @@ const SCENARIOS: Record<
 export default function Page() {
   const [state, setState] = useState<AuraState>(RESET_STATE);
   const [flicker, setFlicker] = useState(false);
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const [viewTab, setViewTab] = useState<"floorplan" | "devices" | "stats" | "simple" | "privacy">("floorplan");
   const [ipadMode, setIpadMode] = useState(false);
   const sequenceTimeouts = useRef<number[]>([]);
@@ -374,7 +374,7 @@ export default function Page() {
       <main className="flex flex-col h-full w-full overflow-hidden bg-[#0B1220]">
         <TopBar
           state={state}
-          onOpenPanel={() => setPanelOpen(true)}
+          onOpenVoice={() => setVoiceOpen(true)}
           ipadMode={ipadMode}
           onToggleIpad={() => setIpadMode((v) => !v)}
         />
@@ -399,9 +399,9 @@ export default function Page() {
 
         <BottomBar active={state.scenario} onPick={runScenario} />
 
-        <DevicePanel
-          open={panelOpen}
-          onClose={() => setPanelOpen(false)}
+        <VoiceMode
+          open={voiceOpen}
+          onClose={() => setVoiceOpen(false)}
           state={state}
           setState={setState}
           runScenario={runScenario}
@@ -431,12 +431,12 @@ export default function Page() {
 
 function TopBar({
   state,
-  onOpenPanel,
+  onOpenVoice,
   ipadMode,
   onToggleIpad,
 }: {
   state: AuraState;
-  onOpenPanel: () => void;
+  onOpenVoice: () => void;
   ipadMode: boolean;
   onToggleIpad: () => void;
 }) {
@@ -483,11 +483,11 @@ function TopBar({
           <TabletIcon />
         </button>
         <button
-          onClick={onOpenPanel}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[#1F2A40] bg-[#0F1A30] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] transition-colors flex items-center gap-1.5"
+          onClick={onOpenVoice}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[#5EE2C6]/40 bg-[#0F1A30] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] transition-colors flex items-center gap-1.5 shadow-[0_0_12px_rgba(94,226,198,0.12)]"
         >
-          <span className="size-1.5 rounded-full bg-[#5EE2C6]" />
-          Devices
+          <MicIcon />
+          Talk to AURA
         </button>
       </div>
     </header>
@@ -3276,6 +3276,386 @@ function MicIcon() {
       <path d="M5 11a7 7 0 0 0 14 0" />
       <line x1="12" y1="18" x2="12" y2="22" />
     </svg>
+  );
+}
+
+// ---------- Voice mode (modal) ----------------------------------------------
+
+function playOpenSound() {
+  if (typeof window === "undefined") return;
+  try {
+    type WindowWithCtx = Window & { webkitAudioContext?: typeof AudioContext };
+    const w = window as unknown as WindowWithCtx;
+    const Ctx = window.AudioContext || w.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const now = ctx.currentTime;
+    const note = (freq: number, start: number, dur: number, peak = 0.13) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + start);
+      gain.gain.setValueAtTime(0, now + start);
+      gain.gain.linearRampToValueAtTime(peak, now + start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + start + dur);
+      osc.start(now + start);
+      osc.stop(now + start + dur + 0.05);
+    };
+    note(523.25, 0, 0.28); // C5
+    note(783.99, 0.09, 0.36); // G5
+  } catch {
+    // audio playback blocked — fail silent
+  }
+}
+
+function playCloseSound() {
+  if (typeof window === "undefined") return;
+  try {
+    type WindowWithCtx = Window & { webkitAudioContext?: typeof AudioContext };
+    const w = window as unknown as WindowWithCtx;
+    const Ctx = window.AudioContext || w.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(659.25, now); // E5
+    osc.frequency.exponentialRampToValueAtTime(329.63, now + 0.18); // E4
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.1, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc.start(now);
+    osc.stop(now + 0.25);
+  } catch {}
+}
+
+function AuraLogo({ listening, speaking }: { listening: boolean; speaking: boolean }) {
+  const active = listening || speaking;
+  const ringColor = listening ? "#5EE2C6" : speaking ? "#7FBEE8" : "#5EE2C6";
+  const fast = active ? 0.95 : 2.6;
+
+  return (
+    <div className="relative size-28 sm:size-32">
+      <svg viewBox="0 0 100 100" className="size-full">
+        <defs>
+          <radialGradient id="auralogo-glow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0%" stopColor={ringColor} stopOpacity="0.55" />
+            <stop offset="100%" stopColor={ringColor} stopOpacity="0" />
+          </radialGradient>
+        </defs>
+
+        {/* Outer halo */}
+        <motion.circle
+          cx="50"
+          cy="50"
+          fill="url(#auralogo-glow)"
+          animate={{
+            r: active ? [40, 48, 40] : [38, 42, 38],
+            opacity: active ? [0.55, 0.85, 0.55] : [0.35, 0.5, 0.35],
+          }}
+          transition={{ duration: fast, repeat: Infinity, ease: "easeInOut" }}
+        />
+
+        {/* Outer ring */}
+        <motion.circle
+          cx="50"
+          cy="50"
+          fill="none"
+          stroke={ringColor}
+          strokeWidth="1.6"
+          animate={{
+            r: active ? [33, 37, 33] : [33, 34, 33],
+            opacity: [0.35, 0.85, 0.35],
+          }}
+          transition={{ duration: fast, repeat: Infinity, ease: "easeInOut" }}
+        />
+
+        {/* Middle ring */}
+        <motion.circle
+          cx="50"
+          cy="50"
+          fill="none"
+          stroke={ringColor}
+          strokeWidth="1.8"
+          animate={{
+            r: active ? [22, 26, 22] : [22.5, 23.5, 22.5],
+            opacity: [0.55, 1, 0.55],
+          }}
+          transition={{
+            duration: fast,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.25,
+          }}
+        />
+
+        {/* Inner ring */}
+        <motion.circle
+          cx="50"
+          cy="50"
+          fill="none"
+          stroke={ringColor}
+          strokeWidth="2"
+          animate={{
+            r: active ? [13, 15, 13] : [13, 13.6, 13],
+            opacity: [0.7, 1, 0.7],
+          }}
+          transition={{
+            duration: fast,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 0.5,
+          }}
+        />
+
+        {/* Core */}
+        <circle cx="50" cy="50" r="6" fill="#0B1220" />
+        <motion.circle
+          cx="50"
+          cy="50"
+          fill={ringColor}
+          animate={{
+            r: active ? [3, 4.2, 3] : [3, 3.4, 3],
+            opacity: [0.9, 1, 0.9],
+          }}
+          transition={{
+            duration: fast,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+      </svg>
+    </div>
+  );
+}
+
+function VoiceMode({
+  open,
+  onClose,
+  state,
+  setState,
+  runScenario,
+}: {
+  open: boolean;
+  onClose: () => void;
+  state: AuraState;
+  setState: React.Dispatch<React.SetStateAction<AuraState>>;
+  runScenario: (id: ScenarioId) => void;
+}) {
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [history, setHistory] = useState<{ from: "user" | "aura"; text: string }[]>([]);
+  const [textInput, setTextInput] = useState("");
+  const [supported, setSupported] = useState(true);
+  const [auraSpeaking, setAuraSpeaking] = useState(false);
+  const recognitionRef = useRef<unknown>(null);
+  const transcriptRef = useRef("");
+
+  useEffect(() => {
+    transcriptRef.current = transcript;
+  }, [transcript]);
+
+  // Play activation sound when modal opens
+  useEffect(() => {
+    if (open) playOpenSound();
+  }, [open]);
+
+  // Speech recognition setup
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const SR =
+      (window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown })
+        .SpeechRecognition ??
+      (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
+    if (!SR) {
+      setSupported(false);
+      return;
+    }
+    const Ctor = SR as new () => {
+      continuous: boolean;
+      interimResults: boolean;
+      lang: string;
+      onresult: (e: { results: { 0: { transcript: string } }[] & { length: number } }) => void;
+      onend: () => void;
+      onerror: () => void;
+      start: () => void;
+      abort: () => void;
+    };
+    const rec = new Ctor();
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+    rec.onresult = (event) => {
+      let t = "";
+      for (let i = 0; i < event.results.length; i++) {
+        t += event.results[i][0].transcript;
+      }
+      setTranscript(t);
+    };
+    rec.onend = () => {
+      setListening(false);
+      const final = transcriptRef.current.trim();
+      if (final) {
+        submit(final);
+        setTranscript("");
+      }
+    };
+    rec.onerror = () => setListening(false);
+    recognitionRef.current = rec;
+    return () => {
+      try {
+        rec.abort();
+      } catch {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function startListening() {
+    const rec = recognitionRef.current as { start: () => void } | null;
+    if (!rec) return;
+    setTranscript("");
+    setListening(true);
+    try {
+      rec.start();
+    } catch {
+      setListening(false);
+    }
+  }
+
+  function stopListening() {
+    const rec = recognitionRef.current as { abort: () => void } | null;
+    if (!rec) return;
+    try {
+      rec.abort();
+    } catch {}
+    setListening(false);
+  }
+
+  function submit(text: string) {
+    const reply = parseCommand(text, state, setState, runScenario);
+    setHistory((h) => [...h.slice(-4), { from: "user", text }, { from: "aura", text: reply }]);
+    setAuraSpeaking(true);
+    window.setTimeout(() => setAuraSpeaking(false), 1800);
+  }
+
+  function onTextSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const v = textInput.trim();
+    if (!v) return;
+    submit(v);
+    setTextInput("");
+  }
+
+  function close() {
+    if (listening) stopListening();
+    playCloseSound();
+    onClose();
+  }
+
+  const lastUser = history.filter((h) => h.from === "user").slice(-1)[0]?.text;
+  const lastAura = history.filter((h) => h.from === "aura").slice(-1)[0]?.text;
+  const statusLine = listening
+    ? transcript
+      ? `"${transcript}"`
+      : "Listening…"
+    : auraSpeaking && lastAura
+    ? lastAura
+    : lastUser
+    ? `Last: "${lastUser}"`
+    : "Tap the mic, or type below.";
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            key="vm-bd"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={close}
+            className="absolute inset-0 bg-black/65 backdrop-blur z-50"
+          />
+          <motion.div
+            key="vm"
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 8 }}
+            transition={{ duration: 0.25, ease: [0.6, 0, 0.2, 1] }}
+            className="absolute inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+          >
+            <div className="pointer-events-auto bg-[#0B1220] border border-[#1F2A40] rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-7 relative">
+              <button
+                onClick={close}
+                className="absolute top-3 right-3 size-8 rounded-lg border border-[#1F2A40] hover:border-[#5EE2C6] text-[#8A98B3] hover:text-[#5EE2C6] flex items-center justify-center transition-colors"
+                aria-label="Close voice mode"
+              >
+                ×
+              </button>
+
+              <div className="flex flex-col items-center pt-1">
+                <AuraLogo listening={listening} speaking={auraSpeaking} />
+
+                <div className="mt-3 text-base sm:text-lg font-semibold text-[#E6ECF5] tracking-wide">
+                  {listening ? "I'm listening" : auraSpeaking ? "AURA" : "AURA"}
+                </div>
+                <div className="text-xs sm:text-sm text-[#8A98B3] mt-1.5 min-h-[20px] text-center max-w-[320px]">
+                  {statusLine}
+                </div>
+
+                {supported && (
+                  <button
+                    onClick={listening ? stopListening : startListening}
+                    className={`mt-5 size-16 rounded-full border-2 flex items-center justify-center transition-all ${
+                      listening
+                        ? "border-[#FF6B7A] bg-[#1A0E10] text-[#FF6B7A] shadow-[0_0_24px_rgba(255,107,122,0.35)]"
+                        : "border-[#5EE2C6] bg-[#0F1A30] text-[#5EE2C6] hover:bg-[#142042] shadow-[0_0_18px_rgba(94,226,198,0.25)]"
+                    }`}
+                    aria-label={listening ? "Stop listening" : "Start listening"}
+                  >
+                    {listening ? (
+                      <span className="size-3 rounded-full bg-[#FF6B7A] animate-pulse" />
+                    ) : (
+                      <MicIcon />
+                    )}
+                  </button>
+                )}
+
+                <form onSubmit={onTextSubmit} className="mt-5 w-full flex gap-2">
+                  <input
+                    value={textInput}
+                    onChange={(e) => setTextInput(e.target.value)}
+                    placeholder={
+                      supported
+                        ? "Or type a command…"
+                        : "Type a command (mic not supported)…"
+                    }
+                    className="flex-1 bg-[#0F1A30] border border-[#1F2A40] rounded-lg px-3 py-2 text-sm text-[#E6ECF5] placeholder:text-[#5A6A85] focus:outline-none focus:border-[#5EE2C6]"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-2 rounded-lg border border-[#1F2A40] bg-[#0F1A30] text-[#5EE2C6] hover:border-[#5EE2C6] text-sm font-medium"
+                  >
+                    Send
+                  </button>
+                </form>
+
+                <div className="mt-4 w-full text-[11px] text-[#5A6A85] text-center">
+                  Try: &quot;goodnight&quot;, &quot;sunny mode&quot;, &quot;close blinds&quot;,
+                  &quot;set to 70&quot;, &quot;I&apos;m home&quot;
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 

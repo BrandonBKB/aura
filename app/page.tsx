@@ -1009,21 +1009,86 @@ function Blinds({
   closed: boolean;
   side: "top" | "bottom" | "left" | "right";
 }) {
+  const depth = 34;
   const horizontal = side === "top" || side === "bottom";
+
+  let panelX: number;
+  let panelY: number;
+  let panelW: number;
+  let panelH: number;
+  if (side === "top") {
+    panelX = x;
+    panelY = y + h;
+    panelW = w;
+    panelH = depth;
+  } else if (side === "bottom") {
+    panelX = x;
+    panelY = y - depth;
+    panelW = w;
+    panelH = depth;
+  } else if (side === "left") {
+    panelX = x + w;
+    panelY = y;
+    panelW = depth;
+    panelH = h;
+  } else {
+    panelX = x - depth;
+    panelY = y;
+    panelW = depth;
+    panelH = h;
+  }
+
+  const slatCount = horizontal ? 5 : 5;
+  const slats = Array.from({ length: slatCount - 1 }).map((_, i) => {
+    const t = (i + 1) / slatCount;
+    return horizontal
+      ? { x1: panelX, y1: panelY + panelH * t, x2: panelX + panelW, y2: panelY + panelH * t }
+      : { x1: panelX + panelW * t, y1: panelY, x2: panelX + panelW * t, y2: panelY + panelH };
+  });
+
+  const transformOrigin =
+    side === "top"
+      ? "50% 0%"
+      : side === "bottom"
+      ? "50% 100%"
+      : side === "left"
+      ? "0% 50%"
+      : "100% 50%";
+
   return (
-    <motion.rect
-      x={x}
-      y={y}
-      width={horizontal ? w : 0}
-      height={horizontal ? 0 : h}
+    <motion.g
+      style={{ transformOrigin, transformBox: "fill-box" }}
       initial={false}
       animate={
-        horizontal ? { height: closed ? h : 0, y } : { width: closed ? w : 0, x }
+        horizontal
+          ? { scaleY: closed ? 1 : 0 }
+          : { scaleX: closed ? 1 : 0 }
       }
       transition={{ duration: 0.7, ease: [0.6, 0, 0.2, 1] }}
-      fill="#5C4628"
-      opacity={0.92}
-    />
+    >
+      <rect
+        x={panelX}
+        y={panelY}
+        width={panelW}
+        height={panelH}
+        fill="#5C4628"
+        stroke="#3A2A14"
+        strokeWidth={0.8}
+        opacity={0.95}
+      />
+      {slats.map((s, i) => (
+        <line
+          key={i}
+          x1={s.x1}
+          y1={s.y1}
+          x2={s.x2}
+          y2={s.y2}
+          stroke="#3A2A14"
+          strokeWidth={0.8}
+          opacity={0.6}
+        />
+      ))}
+    </motion.g>
   );
 }
 

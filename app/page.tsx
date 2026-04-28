@@ -747,6 +747,8 @@ function FloorPlan({ state, flicker }: { state: AuraState; flicker: boolean }) {
         <AirPurifier x={555} y={310} speed={state.airQuality === "poor" ? 3 : 0} />
         {/* TV mounted on the south wall facing the couch */}
         <TV x={272} y={580} on={state.tvOn} />
+        {/* Robot vacuum + dock */}
+        <Vacuum active={state.vacuumActive} />
 
         {/* Kitchen */}
         <g>
@@ -1417,6 +1419,86 @@ function TV({ x, y, on }: { x: number; y: number; on: boolean }) {
       </AnimatePresence>
       <rect x="56" y="14" width="8" height="3" fill="#3D4D6A" />
       <rect x="44" y="17" width="32" height="2" rx="1" fill="#3D4D6A" />
+    </g>
+  );
+}
+
+function Vacuum({ active }: { active: boolean }) {
+  const dockX = 230;
+  const dockY = 565;
+  const pathX = [
+    dockX, dockX, 350, 400, 500, 580, 600, 700, 880, 900, 870, 810, 720, 600, 500, 350, 270, dockX,
+  ];
+  const pathY = [
+    dockY, 410, 360, 290, 320, 250, 240, 320, 320, 240, 370, 410, 480, 540, 540, 540, 540, dockY,
+  ];
+
+  return (
+    <g>
+      <g>
+        <rect
+          x={dockX - 14}
+          y={dockY + 14}
+          width="28"
+          height="6"
+          rx="2"
+          fill="#1F2A40"
+          stroke={active ? "#3D4D6A" : "#5EE2C6"}
+          strokeWidth="0.8"
+        />
+        <circle cx={dockX} cy={dockY + 17} r="1.5" fill={active ? "#3D4D6A" : "#5EE2C6"} />
+      </g>
+
+      <motion.g
+        animate={active ? { x: pathX, y: pathY } : { x: dockX, y: dockY }}
+        transition={
+          active
+            ? { duration: 26, repeat: Infinity, ease: "linear" }
+            : { duration: 1.4, ease: "easeInOut" }
+        }
+      >
+        {active && (
+          <motion.circle
+            r="20"
+            fill="#5EE2C6"
+            opacity={0.12}
+            animate={{ scale: [0.8, 1.2, 0.8] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          />
+        )}
+        <circle r="11" fill="#1F2A40" stroke={active ? "#5EE2C6" : "#3D4D6A"} strokeWidth="1.5" />
+        <circle r="7" fill="#0F1A30" />
+        <motion.g
+          animate={active ? { rotate: 360 } : { rotate: 0 }}
+          transition={
+            active
+              ? { duration: 0.6, repeat: Infinity, ease: "linear" }
+              : { duration: 0.3 }
+          }
+          style={{ transformOrigin: "0px 0px" }}
+        >
+          <line
+            x1="-7"
+            y1="0"
+            x2="7"
+            y2="0"
+            stroke={active ? "#5EE2C6" : "#3D4D6A"}
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+          <line
+            x1="0"
+            y1="-7"
+            x2="0"
+            y2="7"
+            stroke={active ? "#5EE2C6" : "#3D4D6A"}
+            strokeWidth="1"
+            strokeLinecap="round"
+            opacity="0.6"
+          />
+        </motion.g>
+        <circle cx="6" cy="-6" r="1.5" fill={active ? "#5EE2C6" : "#3D4D6A"} />
+      </motion.g>
     </g>
   );
 }

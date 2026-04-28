@@ -306,7 +306,7 @@ export default function Page() {
   const [state, setState] = useState<AuraState>(RESET_STATE);
   const [flicker, setFlicker] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [viewTab, setViewTab] = useState<"floorplan" | "devices" | "stats" | "simple">("floorplan");
+  const [viewTab, setViewTab] = useState<"floorplan" | "devices" | "stats" | "simple" | "privacy">("floorplan");
   const [ipadMode, setIpadMode] = useState(false);
   const sequenceTimeouts = useRef<number[]>([]);
 
@@ -389,8 +389,10 @@ export default function Page() {
               <DevicesView state={state} setState={setState} />
             ) : viewTab === "stats" ? (
               <StatsView state={state} />
-            ) : (
+            ) : viewTab === "simple" ? (
               <SimpleView state={state} setState={setState} runScenario={runScenario} />
+            ) : (
+              <PrivacyView />
             )}
           </div>
         </section>
@@ -1751,14 +1753,16 @@ function ViewTabs({
   active,
   onPick,
 }: {
-  active: "floorplan" | "devices" | "stats" | "simple";
-  onPick: (v: "floorplan" | "devices" | "stats" | "simple") => void;
+  active: "floorplan" | "devices" | "stats" | "simple" | "privacy";
+  onPick: (v: "floorplan" | "devices" | "stats" | "simple" | "privacy") => void;
 }) {
-  const tabs: { id: "floorplan" | "devices" | "stats" | "simple"; label: string }[] = [
+  type Id = "floorplan" | "devices" | "stats" | "simple" | "privacy";
+  const tabs: { id: Id; label: string }[] = [
     { id: "floorplan", label: "Floor Plan" },
     { id: "devices", label: "Devices" },
     { id: "stats", label: "Stats for Nerds" },
     { id: "simple", label: "Simple" },
+    { id: "privacy", label: "Privacy" },
   ];
   return (
     <nav className="px-4 sm:px-6 border-b border-[#1F2A40] bg-[#0B1220]/60">
@@ -2315,6 +2319,278 @@ function TilePhone() {
         strokeWidth="2"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+// ---------- Privacy & Ethics ------------------------------------------------
+
+function PrivacyView() {
+  const [shareUtility, setShareUtility] = useState(false);
+  const [anonAnalytics, setAnonAnalytics] = useState(false);
+  const [voiceCloud, setVoiceCloud] = useState(false);
+  const [cameraSharing, setCameraSharing] = useState(false);
+
+  return (
+    <div className="w-full h-full overflow-y-auto py-2 px-3">
+      <div className="max-w-3xl mx-auto space-y-4">
+        {/* Hero */}
+        <div className="text-center pt-2 pb-2">
+          <div className="inline-flex items-center justify-center size-12 rounded-2xl bg-[#0F1A30] border border-[#5EE2C6]/30 mb-3">
+            <ShieldIcon />
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-semibold text-[#E6ECF5]">
+            Privacy &amp; Ethics
+          </h2>
+          <p className="text-[#8A98B3] mt-1.5 text-sm">
+            How AURA keeps your home <em>your home</em>.
+          </p>
+        </div>
+
+        {/* Trust principles */}
+        <PrivacyCard title="Our principles" tone="mint">
+          <ul className="space-y-2.5 text-sm text-[#E6ECF5]">
+            <PrincipleRow>
+              <strong className="text-[#5EE2C6]">Local first.</strong> Your home&apos;s data
+              stays on a device in your home unless you choose otherwise.
+            </PrincipleRow>
+            <PrincipleRow>
+              <strong className="text-[#5EE2C6]">You always override.</strong> Any
+              automation can be paused, reversed, or disabled at any time.
+            </PrincipleRow>
+            <PrincipleRow>
+              <strong className="text-[#5EE2C6]">Explainable.</strong> When AURA acts, it
+              tells you what it did and why — never silent surveillance.
+            </PrincipleRow>
+            <PrincipleRow>
+              <strong className="text-[#5EE2C6]">Household transparency.</strong> Anyone
+              living here can see what&apos;s being collected and turn it off.
+            </PrincipleRow>
+          </ul>
+        </PrivacyCard>
+
+        {/* What we collect */}
+        <PrivacyCard title="What we collect">
+          <ul className="space-y-2 text-sm text-[#8A98B3]">
+            <li className="flex items-start gap-2">
+              <CheckDot />
+              <span>
+                <span className="text-[#E6ECF5]">Device states</span> — light brightness,
+                thermostat setpoint, lock status. Stored on your local hub.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckDot />
+              <span>
+                <span className="text-[#E6ECF5]">Energy &amp; water usage</span> —
+                aggregated by hour, kept on the hub for your own dashboard.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckDot />
+              <span>
+                <span className="text-[#E6ECF5]">Voice commands</span> — transcribed
+                in-browser; the audio is discarded after the command runs.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <CheckDot />
+              <span>
+                <span className="text-[#E6ECF5]">Camera footage</span> — encrypted, kept
+                for 7 days on local storage. Never uploaded by default.
+              </span>
+            </li>
+          </ul>
+        </PrivacyCard>
+
+        {/* What we never do */}
+        <PrivacyCard title="What we never do" tone="amber">
+          <ul className="space-y-2 text-sm text-[#8A98B3]">
+            <li className="flex items-start gap-2">
+              <NoDot />
+              <span>Sell your data to advertisers, insurers, or data brokers.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <NoDot />
+              <span>Listen continuously — the mic only activates when you tap it.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <NoDot />
+              <span>Track who&apos;s home and when for any third party.</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <NoDot />
+              <span>
+                Make automated decisions you can&apos;t see, audit, or undo.
+              </span>
+            </li>
+            <li className="flex items-start gap-2">
+              <NoDot />
+              <span>
+                Share camera or audio with law enforcement without a court order.
+              </span>
+            </li>
+          </ul>
+        </PrivacyCard>
+
+        {/* Your controls */}
+        <PrivacyCard title="Your controls">
+          <div className="space-y-1">
+            <PrivacyToggle
+              label="Share anonymized energy data with utility"
+              sub="Helps grid demand forecasting. Off by default."
+              on={shareUtility}
+              onClick={() => setShareUtility((v) => !v)}
+            />
+            <PrivacyToggle
+              label="Anonymous product analytics"
+              sub="Crash reports + feature usage, no identifiers."
+              on={anonAnalytics}
+              onClick={() => setAnonAnalytics((v) => !v)}
+            />
+            <PrivacyToggle
+              label="Cloud voice fallback"
+              sub="Use cloud transcription when offline accuracy is low."
+              on={voiceCloud}
+              onClick={() => setVoiceCloud((v) => !v)}
+            />
+            <PrivacyToggle
+              label="Share cameras with neighborhood"
+              sub="Off. Has serious privacy implications — review carefully."
+              on={cameraSharing}
+              onClick={() => setCameraSharing((v) => !v)}
+            />
+          </div>
+          <div className="mt-4 pt-3 border-t border-[#1F2A40] text-xs text-[#8A98B3]">
+            All settings are off by default. You can export or wipe everything AURA
+            stores about your home from{" "}
+            <span className="text-[#5EE2C6]">Settings → Data &amp; Privacy</span>.
+          </div>
+        </PrivacyCard>
+
+        {/* Ethics statement */}
+        <PrivacyCard title="Ethical considerations">
+          <p className="text-sm text-[#8A98B3] leading-relaxed">
+            A smart home is still a home. AURA is designed so that no person living
+            here is monitored without their knowledge, no automation can be used to
+            control or harm a household member, and no data is collected that
+            wouldn&apos;t reasonably be needed to run the home itself. If you live with
+            someone, they should be told this system exists and given the same access
+            you have.
+          </p>
+          <p className="text-sm text-[#8A98B3] leading-relaxed mt-2.5">
+            For domestic abuse situations, see{" "}
+            <span className="text-[#5EE2C6]">aura.example/safe-exit</span> for guidance
+            on regaining device control.
+          </p>
+        </PrivacyCard>
+
+        <p className="text-center text-[10px] text-[#5A6A85] pt-2 pb-4">
+          This is a class-project demo. Privacy claims are illustrative; a real product
+          would require legal review.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PrivacyCard({
+  title,
+  tone,
+  children,
+}: {
+  title: string;
+  tone?: "mint" | "amber";
+  children: React.ReactNode;
+}) {
+  const accent =
+    tone === "amber"
+      ? "border-[#3A2E18] bg-[#1A1408]/40"
+      : tone === "mint"
+      ? "border-[#5EE2C6]/30 bg-[#0F1A30]"
+      : "border-[#1F2A40] bg-[#0F1A30]/60";
+  return (
+    <section className={`rounded-xl border p-4 sm:p-5 ${accent}`}>
+      <h3 className="text-xs uppercase tracking-wider font-semibold text-[#E6ECF5] mb-3">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+function PrincipleRow({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="flex items-start gap-2.5 leading-relaxed">
+      <span className="size-1.5 rounded-full bg-[#5EE2C6] mt-1.5 shrink-0" />
+      <span>{children}</span>
+    </li>
+  );
+}
+
+function CheckDot() {
+  return (
+    <span className="inline-flex items-center justify-center size-4 rounded-full bg-[#5EE2C6]/15 text-[#5EE2C6] text-[10px] mt-0.5 shrink-0">
+      ✓
+    </span>
+  );
+}
+
+function NoDot() {
+  return (
+    <span className="inline-flex items-center justify-center size-4 rounded-full bg-[#F5B544]/15 text-[#F5B544] text-[10px] mt-0.5 shrink-0">
+      ×
+    </span>
+  );
+}
+
+function PrivacyToggle({
+  label,
+  sub,
+  on,
+  onClick,
+}: {
+  label: string;
+  sub: string;
+  on: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5 border-b border-[#1F2A40] last:border-b-0">
+      <div className="min-w-0">
+        <div className="text-sm text-[#E6ECF5]">{label}</div>
+        <div className="text-xs text-[#8A98B3] mt-0.5">{sub}</div>
+      </div>
+      <button
+        onClick={onClick}
+        className={`relative w-12 h-6 rounded-full transition-colors shrink-0 ${
+          on ? "bg-[#5EE2C6]" : "bg-[#1F2A40]"
+        }`}
+        aria-pressed={on}
+      >
+        <span
+          className={`absolute top-0.5 size-5 rounded-full bg-[#0B1220] transition-transform ${
+            on ? "translate-x-6" : "translate-x-0.5"
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#5EE2C6"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="size-6"
+    >
+      <path d="M12 2 L4 6 V12 C4 17 8 21 12 22 C16 21 20 17 20 12 V6 Z" />
+      <path d="M9 12 L11 14 L15 10" />
     </svg>
   );
 }

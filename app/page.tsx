@@ -415,7 +415,7 @@ export default function Page() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 12 }}
               transition={{ duration: 0.25 }}
-              className="absolute bottom-36 right-6 z-30 px-4 py-2.5 rounded-xl bg-[#0F1A30]/95 border border-[#1F2A40] backdrop-blur shadow-2xl text-sm flex items-center gap-2 max-w-sm"
+              className="absolute bottom-44 sm:bottom-36 right-3 sm:right-6 left-3 sm:left-auto z-30 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#0F1A30]/95 border border-[#1F2A40] backdrop-blur shadow-2xl text-xs sm:text-sm flex items-center gap-2 sm:max-w-sm"
             >
               <span className="size-2 rounded-full bg-[#5EE2C6] animate-pulse" />
               <span>{state.toast}</span>
@@ -453,17 +453,25 @@ function TopBar({
   const waterColor = state.waterStatus === "flowing" ? "mint" : "amber";
 
   return (
-    <header className="h-[60px] flex items-center justify-between px-4 sm:px-6 border-b border-[#1F2A40] bg-[#0B1220]/80 backdrop-blur">
-      <div className="flex items-center gap-3">
-        <span className="size-2.5 rounded-full bg-[#5EE2C6] shadow-[0_0_10px_#5EE2C6]" />
-        <h1 className="text-base sm:text-lg font-semibold tracking-wide">
-          AURA <span className="text-[#5EE2C6]">·</span>{" "}
-          <span className="text-[#8A98B3] font-normal">Simulator</span>
+    <header className="h-[60px] flex items-center justify-between px-3 sm:px-6 border-b border-[#1F2A40] bg-[#0B1220]/80 backdrop-blur shrink-0">
+      <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <span className="size-2.5 rounded-full bg-[#5EE2C6] shadow-[0_0_10px_#5EE2C6] shrink-0" />
+        <h1 className="text-base sm:text-lg font-semibold tracking-wide truncate">
+          AURA
+          <span className="hidden sm:inline">
+            {" "}
+            <span className="text-[#5EE2C6]">·</span>{" "}
+            <span className="text-[#8A98B3] font-normal">Simulator</span>
+          </span>
         </h1>
       </div>
-      <div className="flex items-center gap-2 flex-wrap justify-end">
-        <Pill label={weatherLabel[state.weather]} color="mint" />
-        <Pill label={aqLabel} color={aqColor as "mint" | "amber"} />
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
+        <span className="hidden sm:flex">
+          <Pill label={weatherLabel[state.weather]} color="mint" />
+        </span>
+        <span className="hidden md:flex">
+          <Pill label={aqLabel} color={aqColor as "mint" | "amber"} />
+        </span>
         <Pill label={waterLabel} color={waterColor as "mint" | "amber"} />
         <Pill
           label={`${state.totalPowerKw.toFixed(1)} kW`}
@@ -472,7 +480,7 @@ function TopBar({
         />
         <button
           onClick={onToggleIpad}
-          className={`ml-1 size-8 rounded-lg border flex items-center justify-center transition-colors ${
+          className={`hidden sm:flex ml-1 size-8 rounded-lg border items-center justify-center transition-colors ${
             ipadMode
               ? "border-[#5EE2C6] bg-[#142042] text-[#5EE2C6]"
               : "border-[#1F2A40] bg-[#0F1A30] text-[#8A98B3] hover:border-[#5EE2C6] hover:text-[#5EE2C6]"
@@ -484,10 +492,11 @@ function TopBar({
         </button>
         <button
           onClick={onOpenVoice}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[#5EE2C6]/40 bg-[#0F1A30] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] transition-colors flex items-center gap-1.5 shadow-[0_0_12px_rgba(94,226,198,0.12)]"
+          className="px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium border border-[#5EE2C6]/40 bg-[#0F1A30] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] transition-colors flex items-center gap-1.5 shadow-[0_0_12px_rgba(94,226,198,0.12)]"
+          aria-label="Talk to AURA"
         >
           <MicIcon />
-          Talk to AURA
+          <span className="hidden sm:inline">Talk to AURA</span>
         </button>
       </div>
     </header>
@@ -548,22 +557,22 @@ function BottomBar({
   ];
 
   return (
-    <footer className="border-t border-[#1F2A40] bg-[#0B1220]/80 backdrop-blur px-3 sm:px-4 py-3">
-      <div className="flex flex-wrap gap-2 justify-center">
+    <footer className="border-t border-[#1F2A40] bg-[#0B1220]/80 backdrop-blur px-2 sm:px-4 py-2 sm:py-3 shrink-0">
+      <div className="flex flex-wrap gap-1.5 sm:gap-2 justify-center">
         {buttons.map((b) => {
           const isActive = active === b.id;
           return (
             <button
               key={b.id}
               onClick={() => onPick(b.id)}
-              className={`group relative flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all duration-200 ${
+              className={`group relative flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl border text-left transition-all duration-200 ${
                 isActive
                   ? "border-[#5EE2C6] bg-[#0F1A30] shadow-[0_0_24px_rgba(94,226,198,0.18)]"
                   : "border-[#1F2A40] bg-[#0F1A30] hover:border-[#2A3550] hover:bg-[#142042]"
               }`}
             >
               <span
-                className={`flex items-center justify-center size-8 rounded-lg transition-colors ${
+                className={`flex items-center justify-center size-7 sm:size-8 rounded-lg transition-colors shrink-0 ${
                   isActive
                     ? "bg-[#5EE2C6]/15 text-[#5EE2C6]"
                     : "bg-[#162038] text-[#8A98B3] group-hover:text-[#E6ECF5]"
@@ -572,10 +581,10 @@ function BottomBar({
                 {b.icon("size-4")}
               </span>
               <span className="flex flex-col">
-                <span className="text-sm font-medium leading-tight">
+                <span className="text-xs sm:text-sm font-medium leading-tight">
                   {b.label}
                 </span>
-                <span className="text-[11px] text-[#8A98B3] leading-tight">
+                <span className="hidden sm:flex text-[11px] text-[#8A98B3] leading-tight">
                   {b.blurb}
                 </span>
               </span>
@@ -1765,19 +1774,31 @@ function ViewTabs({
     { id: "privacy", label: "Privacy" },
   ];
   return (
-    <nav className="px-4 sm:px-6 border-b border-[#1F2A40] bg-[#0B1220]/60">
-      <div className="flex gap-1 max-w-[1400px] mx-auto">
+    <nav className="px-2 sm:px-6 border-b border-[#1F2A40] bg-[#0B1220]/60 shrink-0">
+      <div className="flex gap-0 sm:gap-1 max-w-[1400px] mx-auto overflow-x-auto sm:overflow-visible scrollbar-none">
         {tabs.map((t) => {
           const isActive = active === t.id;
           return (
             <button
               key={t.id}
               onClick={() => onPick(t.id)}
-              className={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
+              className={`relative px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
                 isActive ? "text-[#5EE2C6]" : "text-[#8A98B3] hover:text-[#E6ECF5]"
               }`}
             >
-              {t.label}
+              {t.id === "stats" ? (
+                <>
+                  <span className="sm:hidden">Stats</span>
+                  <span className="hidden sm:inline">{t.label}</span>
+                </>
+              ) : t.id === "floorplan" ? (
+                <>
+                  <span className="sm:hidden">Plan</span>
+                  <span className="hidden sm:inline">{t.label}</span>
+                </>
+              ) : (
+                t.label
+              )}
               {isActive && (
                 <motion.span
                   layoutId="tab-underline"

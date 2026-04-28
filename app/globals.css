@@ -41,3 +41,7 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #1F2A40; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #2A3550; }
+
+/* Hide scrollbar utility (e.g. on the tab bar's horizontal scroll) */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }

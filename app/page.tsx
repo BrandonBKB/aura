@@ -248,7 +248,7 @@ export default function Page() {
   const [state, setState] = useState<AuraState>(RESET_STATE);
   const [flicker, setFlicker] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [viewTab, setViewTab] = useState<"floorplan" | "devices">("floorplan");
+  const [viewTab, setViewTab] = useState<"floorplan" | "devices" | "stats">("floorplan");
 
   function runScenario(id: ScenarioId) {
     if (id === "reset") {
@@ -286,8 +286,10 @@ export default function Page() {
         <div className="w-full h-full max-w-[1400px] flex items-center justify-center">
           {viewTab === "floorplan" ? (
             <FloorPlan state={state} flicker={flicker} />
-          ) : (
+          ) : viewTab === "devices" ? (
             <DevicesView state={state} setState={setState} />
+          ) : (
+            <StatsView state={state} />
           )}
         </div>
       </section>
@@ -1543,12 +1545,13 @@ function ViewTabs({
   active,
   onPick,
 }: {
-  active: "floorplan" | "devices";
-  onPick: (v: "floorplan" | "devices") => void;
+  active: "floorplan" | "devices" | "stats";
+  onPick: (v: "floorplan" | "devices" | "stats") => void;
 }) {
-  const tabs: { id: "floorplan" | "devices"; label: string }[] = [
+  const tabs: { id: "floorplan" | "devices" | "stats"; label: string }[] = [
     { id: "floorplan", label: "Floor Plan" },
     { id: "devices", label: "Devices" },
+    { id: "stats", label: "Stats for Nerds" },
   ];
   return (
     <nav className="px-4 sm:px-6 border-b border-[#1F2A40] bg-[#0B1220]/60">
@@ -1869,6 +1872,287 @@ function RowAdjust({ onMinus, onPlus }: { onMinus: () => void; onPlus: () => voi
         +
       </button>
     </div>
+  );
+}
+
+// ---------- Stats for Nerds -------------------------------------------------
+
+function StatsView({ state }: { state: AuraState }) {
+  // Live values driven by state
+  const solarKw = state.solarActive ? 6.2 : 0;
+  const drawKw = state.totalPowerKw;
+  const netKw = solarKw - drawKw;
+
+  // Estimated daily totals (mock but plausible — varied based on current state)
+  const solarToday = state.solarActive ? 38.4 : 12.6;
+  const drawToday = 24.7 + (state.evCharging ? 8 : 0) + (state.vacuumActive ? 0.4 : 0);
+  const exportedToday = Math.max(0, solarToday - drawToday);
+  const savingsToday = (exportedToday * 0.18 + drawToday * 0.04).toFixed(2);
+
+  // Power breakdown — sums to drawKw approximately
+  const breakdown = [
+    { name: "Climate", w: 1.4 + (state.thermostatF < 70 ? 0.3 : 0), color: "#5EE2C6" },
+    { name: "Lights", w: (state.lightsBrightness / 100) * 0.4, color: "#FFD27A" },
+    { name: "TV + Media", w: state.tvOn ? 0.18 : 0.02, color: "#7FBEE8" },
+    { name: "Air Purifier", w: state.airPurifierSpeed >= 2 ? 0.09 : 0.03, color: "#A8E6F0" },
+    { name: "EV Charger", w: state.evCharging ? 7.2 : 0, color: "#5EE2C6" },
+    { name: "Appliances", w: 0.6, color: "#F5B544" },
+    { name: "Vacuum", w: state.vacuumActive ? 0.04 : 0, color: "#C9A678" },
+    { name: "Standby", w: 0.12, color: "#3D4D6A" },
+  ];
+  const breakdownMax = Math.max(...breakdown.map((b) => b.w), 1);
+
+  // Water — daily gallons by fixture
+  const waterUsedToday = state.waterStatus === "off" ? 142.0 : 168.4;
+  const waterSavedToday = 47.2; // saved by smart fixtures vs baseline
+  const waterFixtures = [
+    { name: "Kitchen Sink", g: 12.4, color: "#7FBEE8" },
+    { name: "Bathroom Sink", g: 8.9, color: "#5BA8E8" },
+    { name: "Shower", g: 26.5, color: "#A8E6F0" },
+    { name: "Toilets", g: 18.2, color: "#5EE2C6" },
+    { name: "Dishwasher", g: 9.6, color: "#5EE2C6" },
+    { name: "Washer", g: 22.8, color: "#7FBEE8" },
+    { name: "Irrigation", g: 70.0, color: "#3FA290" },
+  ];
+  const fixturesMax = Math.max(...waterFixtures.map((f) => f.g));
+
+  // Hourly power chart (24h) — sine-ish curve weighted by solar
+  const hourly = Array.from({ length: 24 }).map((_, h) => {
+    const sun = Math.max(0, Math.sin(((h - 6) / 12) * Math.PI)) * 5.8;
+    const baseline = 1.2 + 0.7 * Math.sin((h / 24) * Math.PI * 2);
+    return { hour: h, draw: Math.max(0.4, baseline), solar: sun };
+  });
+
+  // Carbon offset (kg CO2 saved this month)
+  const carbonOffsetKg = 184.6;
+  // Voice + automation activity
+  const voiceCommands = 27;
+  const automationsRun = 142;
+  const devicesOnline = 31;
+
+  return (
+    <div className="w-full h-full overflow-y-auto py-2">
+      <div className="max-w-[1400px] mx-auto space-y-4">
+        {/* Hero stat cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <HeroStat
+            label="Solar (now)"
+            value={`${solarKw.toFixed(1)} kW`}
+            sub={state.solarActive ? "Harvesting" : "Idle"}
+            accent={state.solarActive ? "mint" : "muted"}
+          />
+          <HeroStat
+            label="Battery"
+            value={`${state.batteryLevel}%`}
+            sub={state.batteryCharging ? "Charging" : "Idle"}
+            accent={state.batteryLevel < 25 ? "amber" : "mint"}
+          />
+          <HeroStat
+            label="Net flow"
+            value={`${netKw >= 0 ? "+" : ""}${netKw.toFixed(1)} kW`}
+            sub={netKw >= 0 ? "Exporting" : "Drawing"}
+            accent={netKw >= 0 ? "mint" : "amber"}
+          />
+          <HeroStat
+            label="Saved today"
+            value={`$${savingsToday}`}
+            sub={`${exportedToday.toFixed(1)} kWh exported`}
+            accent="mint"
+          />
+        </div>
+
+        {/* Power breakdown + water breakdown */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <StatPanel title="Power draw by device" right={`${drawKw.toFixed(2)} kW now`}>
+            <div className="space-y-2">
+              {breakdown.map((b) => (
+                <div key={b.name} className="flex items-center gap-2 text-xs">
+                  <div className="w-24 text-[#8A98B3] truncate">{b.name}</div>
+                  <div className="flex-1 h-2 rounded-full bg-[#1F2A40] overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${(b.w / breakdownMax) * 100}%`,
+                        backgroundColor: b.color,
+                      }}
+                    />
+                  </div>
+                  <div className="w-16 text-right tabular-nums text-[#E6ECF5]">
+                    {b.w.toFixed(2)} kW
+                  </div>
+                </div>
+              ))}
+            </div>
+          </StatPanel>
+
+          <StatPanel title="Water by fixture" right={`${waterUsedToday.toFixed(1)} gal today`}>
+            <div className="space-y-2">
+              {waterFixtures.map((f) => (
+                <div key={f.name} className="flex items-center gap-2 text-xs">
+                  <div className="w-28 text-[#8A98B3] truncate">{f.name}</div>
+                  <div className="flex-1 h-2 rounded-full bg-[#1F2A40] overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${(f.g / fixturesMax) * 100}%`,
+                        backgroundColor: f.color,
+                      }}
+                    />
+                  </div>
+                  <div className="w-16 text-right tabular-nums text-[#E6ECF5]">
+                    {f.g.toFixed(1)} gal
+                  </div>
+                </div>
+              ))}
+              <div className="pt-2 mt-2 border-t border-[#1F2A40] flex items-center justify-between text-xs">
+                <span className="text-[#8A98B3]">Saved by smart fixtures vs baseline</span>
+                <span className="text-[#5EE2C6] tabular-nums">
+                  {waterSavedToday.toFixed(1)} gal · 22%
+                </span>
+              </div>
+              {state.waterStatus === "off" && (
+                <div className="text-xs text-[#F5B544] flex items-center gap-1.5 pt-1">
+                  <span className="size-1.5 rounded-full bg-[#F5B544] animate-pulse" />
+                  Shutoff valve closed — leak isolated
+                </div>
+              )}
+            </div>
+          </StatPanel>
+        </div>
+
+        {/* 24h power chart + activity + carbon */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="lg:col-span-2">
+            <StatPanel title="24-hour power (kW)" right="Solar vs draw">
+              <HourlyChart data={hourly} />
+              <div className="flex items-center gap-4 text-xs text-[#8A98B3] pt-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-sm bg-[#FFD27A]" /> Solar
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2 rounded-sm bg-[#5EE2C6]" /> Draw
+                </span>
+              </div>
+            </StatPanel>
+          </div>
+          <StatPanel title="This month" right="Apr">
+            <div className="space-y-3">
+              <BigStat label="CO₂ offset" value={`${carbonOffsetKg.toFixed(1)} kg`} sub="≈ 412 mi not driven" />
+              <BigStat label="Automations run" value={automationsRun.toString()} sub="last 24h" />
+              <BigStat label="Voice commands" value={voiceCommands.toString()} sub="processed" />
+              <BigStat label="Devices online" value={`${devicesOnline} / ${devicesOnline}`} sub="all healthy" />
+            </div>
+          </StatPanel>
+        </div>
+
+        {/* Footnote */}
+        <p className="text-[10px] text-[#5A6A85] text-center pt-1 pb-3">
+          Stats are simulated for demo purposes. Live values reflect current scenario state.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function HeroStat({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  accent: "mint" | "amber" | "muted";
+}) {
+  const valueColor =
+    accent === "amber" ? "text-[#F5B544]" : accent === "muted" ? "text-[#8A98B3]" : "text-[#5EE2C6]";
+  return (
+    <div className="rounded-xl border border-[#1F2A40] bg-[#0F1A30] px-4 py-3">
+      <div className="text-[10px] uppercase tracking-wider text-[#8A98B3]">{label}</div>
+      <div className={`text-2xl font-semibold tabular-nums ${valueColor}`}>{value}</div>
+      <div className="text-xs text-[#8A98B3] mt-0.5">{sub}</div>
+    </div>
+  );
+}
+
+function StatPanel({
+  title,
+  right,
+  children,
+}: {
+  title: string;
+  right?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-[#1F2A40] bg-[#0F1A30]/60 p-4">
+      <header className="flex items-center justify-between mb-3">
+        <h3 className="text-xs uppercase tracking-wider font-semibold text-[#E6ECF5]">{title}</h3>
+        {right && <span className="text-xs text-[#5EE2C6] tabular-nums">{right}</span>}
+      </header>
+      {children}
+    </div>
+  );
+}
+
+function BigStat({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 pb-2.5 border-b border-[#1F2A40] last:border-b-0 last:pb-0">
+      <div className="min-w-0">
+        <div className="text-xs text-[#8A98B3]">{label}</div>
+        <div className="text-[10px] text-[#5A6A85]">{sub}</div>
+      </div>
+      <div className="text-lg font-semibold text-[#E6ECF5] tabular-nums shrink-0">{value}</div>
+    </div>
+  );
+}
+
+function HourlyChart({ data }: { data: { hour: number; draw: number; solar: number }[] }) {
+  const w = 600;
+  const h = 140;
+  const pad = 16;
+  const max = Math.max(...data.map((d) => Math.max(d.draw, d.solar)));
+  const x = (i: number) => pad + (i / (data.length - 1)) * (w - pad * 2);
+  const y = (v: number) => h - pad - (v / max) * (h - pad * 2);
+
+  const drawPath = data.map((d, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(d.draw).toFixed(1)}`).join(" ");
+  const solarPath = data.map((d, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(d.solar).toFixed(1)}`).join(" ");
+  const solarFill = `${solarPath} L${x(data.length - 1).toFixed(1)},${y(0).toFixed(1)} L${x(0).toFixed(1)},${y(0).toFixed(1)} Z`;
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-32 block">
+      {/* Grid */}
+      {[0.25, 0.5, 0.75].map((t) => (
+        <line
+          key={t}
+          x1={pad}
+          x2={w - pad}
+          y1={pad + t * (h - pad * 2)}
+          y2={pad + t * (h - pad * 2)}
+          stroke="#1F2A40"
+          strokeDasharray="2 4"
+        />
+      ))}
+      {/* Solar fill */}
+      <path d={solarFill} fill="#FFD27A" opacity="0.18" />
+      <path d={solarPath} fill="none" stroke="#FFD27A" strokeWidth="1.6" />
+      {/* Draw line */}
+      <path d={drawPath} fill="none" stroke="#5EE2C6" strokeWidth="1.6" />
+      {/* Hour ticks */}
+      {[0, 6, 12, 18].map((tick) => (
+        <text
+          key={tick}
+          x={x(tick)}
+          y={h - 2}
+          fontSize="9"
+          fill="#5A6A85"
+          textAnchor="middle"
+        >
+          {tick === 0 ? "12a" : tick === 12 ? "12p" : `${tick}${tick < 12 ? "a" : "p"}`}
+        </text>
+      ))}
+    </svg>
   );
 }
 

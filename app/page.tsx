@@ -397,7 +397,9 @@ export default function Page() {
           </div>
         </section>
 
-        <BottomBar active={state.scenario} onPick={runScenario} />
+        {viewTab === "floorplan" && (
+          <BottomBar active={state.scenario} onPick={runScenario} />
+        )}
 
         <VoiceMode
           open={voiceOpen}

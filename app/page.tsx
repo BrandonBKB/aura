@@ -1099,7 +1099,7 @@ function Blinds({
   closed: boolean;
   side: "top" | "bottom" | "left" | "right";
 }) {
-  const depth = 34;
+  const depth = 14;
   const horizontal = side === "top" || side === "bottom";
 
   let panelX: number;
@@ -1128,7 +1128,7 @@ function Blinds({
     panelH = h;
   }
 
-  const slatCount = horizontal ? 5 : 5;
+  const slatCount = 3;
   const slats = Array.from({ length: slatCount - 1 }).map((_, i) => {
     const t = (i + 1) / slatCount;
     return horizontal

@@ -16,6 +16,7 @@ type ScenarioId =
   | "leak"
   | "cheap"
   | "goodnight"
+  | "idle"
   | "reset";
 
 type Weather = "clear" | "storm" | "smoky" | "night";
@@ -38,6 +39,7 @@ type AuraState = {
   lightsBrightness: number; // 0..100
   thermostatF: number;
   airPurifierSpeed: number; // 0..3
+  tvOn: boolean;
   toast: string | null;
 };
 
@@ -57,6 +59,7 @@ const RESET_STATE: AuraState = {
   lightsBrightness: 70,
   thermostatF: 72,
   airPurifierSpeed: 1,
+  tvOn: true,
   toast: null,
 };
 
@@ -201,10 +204,31 @@ const SCENARIOS: Record<
       lightsBrightness: 8,
       thermostatF: 68,
       airPurifierSpeed: 1,
+      tvOn: false,
       exteriorLights: true,
       totalPowerKw: 0.9,
     }),
     toast: "AURA: goodnight — locking down, cooling to 68°.",
+  },
+  idle: {
+    label: "Idle Mode",
+    blurb: "No activity — power down devices",
+    icon: IdleIcon,
+    apply: (s) => ({
+      ...s,
+      airQuality: "good",
+      waterStatus: "flowing",
+      leakRoom: null,
+      batteryCharging: false,
+      evCharging: false,
+      lightsBrightness: 0,
+      thermostatF: 76,
+      airPurifierSpeed: 1,
+      tvOn: false,
+      exteriorLights: false,
+      totalPowerKw: 0.3,
+    }),
+    toast: "AURA: home is idle — powering down devices to save energy.",
   },
 };
 
@@ -356,6 +380,7 @@ function BottomBar({
     { id: "leak", label: SCENARIOS.leak.label, blurb: SCENARIOS.leak.blurb, icon: SCENARIOS.leak.icon },
     { id: "cheap", label: SCENARIOS.cheap.label, blurb: SCENARIOS.cheap.blurb, icon: SCENARIOS.cheap.icon },
     { id: "goodnight", label: SCENARIOS.goodnight.label, blurb: SCENARIOS.goodnight.blurb, icon: SCENARIOS.goodnight.icon },
+    { id: "idle", label: SCENARIOS.idle.label, blurb: SCENARIOS.idle.blurb, icon: SCENARIOS.idle.icon },
     { id: "reset", label: "Reset", blurb: "Default neutral state", icon: ResetIcon },
   ];
 
@@ -687,6 +712,8 @@ function FloorPlan({ state, flicker }: { state: AuraState; flicker: boolean }) {
         <AirPurifier x={490} y={508} speed={state.airPurifierSpeed} />
         {/* Bedroom purifier — only kicks on when air quality is poor */}
         <AirPurifier x={555} y={310} speed={state.airQuality === "poor" ? 3 : 0} />
+        {/* TV mounted on the south wall facing the couch */}
+        <TV x={272} y={580} on={state.tvOn} />
 
         {/* Kitchen */}
         <g>
@@ -1290,6 +1317,77 @@ function AirPurifier({
   );
 }
 
+function TV({ x, y, on }: { x: number; y: number; on: boolean }) {
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <motion.ellipse
+        cx="60"
+        cy="6"
+        rx="78"
+        ry="14"
+        fill="#5BA8E8"
+        animate={{ opacity: on ? 0.35 : 0 }}
+        transition={{ duration: 0.5 }}
+      />
+      <rect x="0" y="0" width="120" height="14" rx="2" fill="#1A1F2E" stroke="#3D4D6A" strokeWidth="1" />
+      <rect
+        x="3"
+        y="2"
+        width="114"
+        height="10"
+        rx="1"
+        fill={on ? "#0E2A48" : "#0A0F1A"}
+        stroke={on ? "#5BA8E8" : "#1F2A40"}
+        strokeWidth="0.6"
+      />
+      <AnimatePresence>
+        {on && (
+          <motion.g
+            key="tv-content"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            <motion.rect
+              x="6"
+              y="4"
+              width="20"
+              height="6"
+              rx="1"
+              fill="#5EE2C6"
+              animate={{ opacity: [0.5, 0.95, 0.6] }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.rect
+              x="30"
+              y="4"
+              width="34"
+              height="6"
+              rx="1"
+              fill="#FFD27A"
+              animate={{ opacity: [0.7, 0.4, 0.85] }}
+              transition={{ duration: 3.1, repeat: Infinity, ease: "easeInOut" }}
+            />
+            <motion.rect
+              x="68"
+              y="4"
+              width="46"
+              height="6"
+              rx="1"
+              fill="#7FBEE8"
+              animate={{ opacity: [0.45, 0.85, 0.55] }}
+              transition={{ duration: 2.7, repeat: Infinity, ease: "easeInOut" }}
+            />
+          </motion.g>
+        )}
+      </AnimatePresence>
+      <rect x="56" y="14" width="8" height="3" fill="#3D4D6A" />
+      <rect x="44" y="17" width="32" height="2" rx="1" fill="#3D4D6A" />
+    </g>
+  );
+}
+
 function ExteriorLight({
   cx,
   cy,
@@ -1383,6 +1481,15 @@ function ResetIcon(cls: string = "size-4") {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>
       <polyline points="1 4 1 10 7 10" />
       <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    </svg>
+  );
+}
+
+function IdleIcon(cls: string = "size-4") {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>
+      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+      <line x1="12" y1="2" x2="12" y2="12" />
     </svg>
   );
 }

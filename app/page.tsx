@@ -248,7 +248,8 @@ export default function Page() {
   const [state, setState] = useState<AuraState>(RESET_STATE);
   const [flicker, setFlicker] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [viewTab, setViewTab] = useState<"floorplan" | "devices" | "stats">("floorplan");
+  const [viewTab, setViewTab] = useState<"floorplan" | "devices" | "stats" | "simple">("floorplan");
+  const [ipadMode, setIpadMode] = useState(false);
 
   function runScenario(id: ScenarioId) {
     if (id === "reset") {
@@ -277,55 +278,74 @@ export default function Page() {
   }, []);
 
   return (
-    <main className="flex flex-col h-screen w-full overflow-hidden">
-      <TopBar state={state} onOpenPanel={() => setPanelOpen(true)} />
+    <IPadFrame on={ipadMode}>
+      <main className="flex flex-col h-full w-full overflow-hidden bg-[#0B1220]">
+        <TopBar
+          state={state}
+          onOpenPanel={() => setPanelOpen(true)}
+          ipadMode={ipadMode}
+          onToggleIpad={() => setIpadMode((v) => !v)}
+        />
 
-      <ViewTabs active={viewTab} onPick={setViewTab} />
+        <ViewTabs active={viewTab} onPick={setViewTab} />
 
-      <section className="flex-1 min-h-0 flex items-center justify-center px-4 sm:px-8 py-4">
-        <div className="w-full h-full max-w-[1400px] flex items-center justify-center">
-          {viewTab === "floorplan" ? (
-            <FloorPlan state={state} flicker={flicker} />
-          ) : viewTab === "devices" ? (
-            <DevicesView state={state} setState={setState} />
-          ) : (
-            <StatsView state={state} />
+        <section className="flex-1 min-h-0 flex items-center justify-center px-4 sm:px-8 py-4">
+          <div className="w-full h-full max-w-[1400px] flex items-center justify-center">
+            {viewTab === "floorplan" ? (
+              <FloorPlan state={state} flicker={flicker} />
+            ) : viewTab === "devices" ? (
+              <DevicesView state={state} setState={setState} />
+            ) : viewTab === "stats" ? (
+              <StatsView state={state} />
+            ) : (
+              <SimpleView state={state} setState={setState} runScenario={runScenario} />
+            )}
+          </div>
+        </section>
+
+        <BottomBar active={state.scenario} onPick={runScenario} />
+
+        <DevicePanel
+          open={panelOpen}
+          onClose={() => setPanelOpen(false)}
+          state={state}
+          setState={setState}
+          runScenario={runScenario}
+        />
+
+        <AnimatePresence>
+          {state.toast && (
+            <motion.div
+              key={state.toast}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 12 }}
+              transition={{ duration: 0.25 }}
+              className="absolute bottom-36 right-6 z-30 px-4 py-2.5 rounded-xl bg-[#0F1A30]/95 border border-[#1F2A40] backdrop-blur shadow-2xl text-sm flex items-center gap-2 max-w-sm"
+            >
+              <span className="size-2 rounded-full bg-[#5EE2C6] animate-pulse" />
+              <span>{state.toast}</span>
+            </motion.div>
           )}
-        </div>
-      </section>
-
-      <BottomBar active={state.scenario} onPick={runScenario} />
-
-      <DevicePanel
-        open={panelOpen}
-        onClose={() => setPanelOpen(false)}
-        state={state}
-        setState={setState}
-        runScenario={runScenario}
-      />
-
-      <AnimatePresence>
-        {state.toast && (
-          <motion.div
-            key={state.toast}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 12 }}
-            transition={{ duration: 0.25 }}
-            className="fixed bottom-36 right-6 z-30 px-4 py-2.5 rounded-xl bg-[#0F1A30]/95 border border-[#1F2A40] backdrop-blur shadow-2xl text-sm flex items-center gap-2 max-w-sm"
-          >
-            <span className="size-2 rounded-full bg-[#5EE2C6] animate-pulse" />
-            <span>{state.toast}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </main>
+        </AnimatePresence>
+      </main>
+    </IPadFrame>
   );
 }
 
 // ---------- Top bar ---------------------------------------------------------
 
-function TopBar({ state, onOpenPanel }: { state: AuraState; onOpenPanel: () => void }) {
+function TopBar({
+  state,
+  onOpenPanel,
+  ipadMode,
+  onToggleIpad,
+}: {
+  state: AuraState;
+  onOpenPanel: () => void;
+  ipadMode: boolean;
+  onToggleIpad: () => void;
+}) {
   const weatherLabel: Record<Weather, string> = {
     clear: "Clear · 74°F",
     storm: "Storm · 61°F",
@@ -357,8 +377,20 @@ function TopBar({ state, onOpenPanel }: { state: AuraState; onOpenPanel: () => v
           mono
         />
         <button
+          onClick={onToggleIpad}
+          className={`ml-1 size-8 rounded-lg border flex items-center justify-center transition-colors ${
+            ipadMode
+              ? "border-[#5EE2C6] bg-[#142042] text-[#5EE2C6]"
+              : "border-[#1F2A40] bg-[#0F1A30] text-[#8A98B3] hover:border-[#5EE2C6] hover:text-[#5EE2C6]"
+          }`}
+          title={ipadMode ? "Hide iPad frame" : "Show iPad frame"}
+          aria-label="Toggle iPad frame"
+        >
+          <TabletIcon />
+        </button>
+        <button
           onClick={onOpenPanel}
-          className="ml-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-[#1F2A40] bg-[#0F1A30] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] transition-colors flex items-center gap-1.5"
+          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-[#1F2A40] bg-[#0F1A30] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] transition-colors flex items-center gap-1.5"
         >
           <span className="size-1.5 rounded-full bg-[#5EE2C6]" />
           Devices
@@ -1539,19 +1571,52 @@ function Tree({ x, y, small }: { x: number; y: number; small?: boolean }) {
   );
 }
 
+// ---------- iPad frame wrapper ----------------------------------------------
+
+function IPadFrame({ on, children }: { on: boolean; children: React.ReactNode }) {
+  if (!on) {
+    return <div className="h-screen w-full">{children}</div>;
+  }
+  return (
+    <div className="min-h-screen w-full bg-gradient-to-br from-[#1A2236] via-[#0E1828] to-[#1A2236] flex items-center justify-center p-4 sm:p-8">
+      <div
+        className="relative bg-[#0F141E] rounded-[44px] p-3 sm:p-4 shadow-[0_30px_80px_rgba(0,0,0,0.6)] border border-[#1F2A40]"
+        style={{
+          width: "min(100%, 1400px)",
+          aspectRatio: "16 / 10",
+          maxHeight: "calc(100vh - 4rem)",
+        }}
+      >
+        {/* Camera dot */}
+        <div className="absolute top-1.5 sm:top-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+          <div className="size-1.5 rounded-full bg-[#1F2A40] border border-[#3D4D6A]" />
+          <div className="size-1 rounded-full bg-[#3D4D6A]" />
+        </div>
+        {/* Inner screen */}
+        <div className="bg-[#0B1220] rounded-[28px] overflow-hidden h-full w-full relative">
+          {children}
+        </div>
+        {/* Home indicator pill */}
+        <div className="absolute bottom-1.5 sm:bottom-2 left-1/2 -translate-x-1/2 w-20 h-[3px] rounded-full bg-[#3D4D6A]" />
+      </div>
+    </div>
+  );
+}
+
 // ---------- View tabs + devices view ----------------------------------------
 
 function ViewTabs({
   active,
   onPick,
 }: {
-  active: "floorplan" | "devices" | "stats";
-  onPick: (v: "floorplan" | "devices" | "stats") => void;
+  active: "floorplan" | "devices" | "stats" | "simple";
+  onPick: (v: "floorplan" | "devices" | "stats" | "simple") => void;
 }) {
-  const tabs: { id: "floorplan" | "devices" | "stats"; label: string }[] = [
+  const tabs: { id: "floorplan" | "devices" | "stats" | "simple"; label: string }[] = [
     { id: "floorplan", label: "Floor Plan" },
     { id: "devices", label: "Devices" },
     { id: "stats", label: "Stats for Nerds" },
+    { id: "simple", label: "Simple" },
   ];
   return (
     <nav className="px-4 sm:px-6 border-b border-[#1F2A40] bg-[#0B1220]/60">
@@ -1872,6 +1937,243 @@ function RowAdjust({ onMinus, onPlus }: { onMinus: () => void; onPlus: () => voi
         +
       </button>
     </div>
+  );
+}
+
+// ---------- Simple view (large tap-targets, minimal text) ------------------
+
+function SimpleView({
+  state,
+  setState,
+  runScenario,
+}: {
+  state: AuraState;
+  setState: React.Dispatch<React.SetStateAction<AuraState>>;
+  runScenario: (id: ScenarioId) => void;
+}) {
+  const lightsOn = state.lightsBrightness > 0;
+  return (
+    <div className="w-full h-full overflow-y-auto py-4 px-3">
+      <div className="max-w-3xl mx-auto">
+        <div className="text-center mb-6">
+          <h2 className="text-2xl sm:text-3xl font-semibold text-[#E6ECF5]">Welcome home</h2>
+          <p className="text-[#8A98B3] text-base sm:text-lg mt-1">Tap a button to control your home.</p>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+          <BigTile
+            label="Lights"
+            status={lightsOn ? `On · ${state.lightsBrightness}%` : "Off"}
+            active={lightsOn}
+            onClick={() =>
+              setState((s) => ({ ...s, lightsBrightness: lightsOn ? 0 : 80 }))
+            }
+            icon={<TileBulb on={lightsOn} />}
+          />
+          <BigTile
+            label="Blinds"
+            status={state.blindsClosed ? "Closed" : "Open"}
+            active={!state.blindsClosed}
+            onClick={() => setState((s) => ({ ...s, blindsClosed: !s.blindsClosed }))}
+            icon={<TileBlinds closed={state.blindsClosed} />}
+          />
+          <BigTile
+            label="TV"
+            status={state.tvOn ? "On" : "Off"}
+            active={state.tvOn}
+            onClick={() => setState((s) => ({ ...s, tvOn: !s.tvOn }))}
+            icon={<TileTV on={state.tvOn} />}
+          />
+          <TempTile state={state} setState={setState} />
+          <BigTile
+            label="Goodnight"
+            status="Tap to sleep"
+            onClick={() => runScenario("goodnight")}
+            icon={<TileMoon />}
+          />
+          <BigTile
+            label="Help"
+            status="Call family"
+            onClick={() =>
+              setState((s) => ({ ...s, toast: "AURA: calling Mary now…" }))
+            }
+            icon={<TilePhone />}
+            danger
+          />
+        </div>
+
+        <p className="text-center text-[#5A6A85] text-xs mt-6">
+          Need to do more? Use the Floor Plan or Devices tabs at the top.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function BigTile({
+  label,
+  status,
+  onClick,
+  icon,
+  active,
+  danger,
+}: {
+  label: string;
+  status: string;
+  onClick: () => void;
+  icon: React.ReactNode;
+  active?: boolean;
+  danger?: boolean;
+}) {
+  const borderColor = danger
+    ? "border-[#FF6B7A]/40 hover:border-[#FF6B7A]"
+    : active
+    ? "border-[#5EE2C6] shadow-[0_0_24px_rgba(94,226,198,0.18)]"
+    : "border-[#1F2A40] hover:border-[#5EE2C6]";
+  const bg = danger ? "bg-[#1A0E10]" : active ? "bg-[#0F1A30]" : "bg-[#0F1A30]";
+  const labelColor = danger ? "text-[#FF6B7A]" : "text-[#E6ECF5]";
+  return (
+    <button
+      onClick={onClick}
+      className={`${bg} ${borderColor} border-2 rounded-2xl p-5 sm:p-6 flex flex-col items-center gap-2 sm:gap-3 transition-all hover:scale-[1.02] active:scale-[0.98]`}
+    >
+      <div className="size-16 sm:size-20 flex items-center justify-center">{icon}</div>
+      <div className={`text-lg sm:text-xl font-semibold ${labelColor}`}>{label}</div>
+      <div className="text-xs sm:text-sm text-[#8A98B3]">{status}</div>
+    </button>
+  );
+}
+
+function TempTile({
+  state,
+  setState,
+}: {
+  state: AuraState;
+  setState: React.Dispatch<React.SetStateAction<AuraState>>;
+}) {
+  return (
+    <div className="bg-[#0F1A30] border-2 border-[#1F2A40] rounded-2xl p-5 sm:p-6 flex flex-col items-center gap-2 sm:gap-3">
+      <div className="text-3xl sm:text-4xl font-semibold text-[#5EE2C6] tabular-nums">
+        {state.thermostatF}°
+      </div>
+      <div className="text-lg sm:text-xl font-semibold text-[#E6ECF5]">Temperature</div>
+      <div className="flex gap-2 mt-1">
+        <button
+          onClick={() =>
+            setState((s) => ({ ...s, thermostatF: Math.max(60, s.thermostatF - 1) }))
+          }
+          className="size-10 rounded-xl border-2 border-[#1F2A40] bg-[#0B1220] text-[#5EE2C6] hover:border-[#5EE2C6] text-2xl font-bold leading-none active:scale-95 transition-all"
+          aria-label="Cooler"
+        >
+          −
+        </button>
+        <button
+          onClick={() =>
+            setState((s) => ({ ...s, thermostatF: Math.min(85, s.thermostatF + 1) }))
+          }
+          className="size-10 rounded-xl border-2 border-[#1F2A40] bg-[#0B1220] text-[#5EE2C6] hover:border-[#5EE2C6] text-2xl font-bold leading-none active:scale-95 transition-all"
+          aria-label="Warmer"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TileBulb({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 64 64" className="size-full">
+      {on && <circle cx="32" cy="28" r="22" fill="#FFD27A" opacity="0.25" />}
+      <path
+        d="M32 8 C22 8 16 16 16 24 C16 30 18 34 22 38 L22 44 L42 44 L42 38 C46 34 48 30 48 24 C48 16 42 8 32 8 Z"
+        fill={on ? "#FFE9B0" : "#1F2A40"}
+        stroke={on ? "#FFD27A" : "#3D4D6A"}
+        strokeWidth="2"
+      />
+      <rect x="22" y="46" width="20" height="6" rx="2" fill={on ? "#A89870" : "#3D4D6A"} />
+      <rect x="24" y="54" width="16" height="4" rx="2" fill={on ? "#8A7860" : "#2A3550"} />
+    </svg>
+  );
+}
+
+function TileBlinds({ closed }: { closed: boolean }) {
+  return (
+    <svg viewBox="0 0 64 64" className="size-full">
+      <rect x="10" y="10" width="44" height="44" rx="4" fill="#0B1220" stroke="#3D4D6A" strokeWidth="2" />
+      {closed ? (
+        <>
+          <rect x="12" y="14" width="40" height="36" fill="#5C4628" />
+          {[0, 1, 2, 3, 4].map((i) => (
+            <line
+              key={i}
+              x1="12"
+              y1={20 + i * 7}
+              x2="52"
+              y2={20 + i * 7}
+              stroke="#3A2A14"
+              strokeWidth="1"
+            />
+          ))}
+        </>
+      ) : (
+        <>
+          <rect x="12" y="14" width="40" height="36" fill="#9CC2DA" opacity="0.85" />
+          <line x1="32" y1="14" x2="32" y2="50" stroke="#1F2A40" strokeWidth="1" />
+          <line x1="12" y1="32" x2="52" y2="32" stroke="#1F2A40" strokeWidth="1" />
+        </>
+      )}
+    </svg>
+  );
+}
+
+function TileTV({ on }: { on: boolean }) {
+  return (
+    <svg viewBox="0 0 64 64" className="size-full">
+      <rect x="6" y="14" width="52" height="32" rx="3" fill="#1A1F2E" stroke="#3D4D6A" strokeWidth="2" />
+      <rect x="9" y="17" width="46" height="26" rx="2" fill={on ? "#0E2A48" : "#0A0F1A"} />
+      {on && (
+        <>
+          <rect x="13" y="22" width="10" height="4" rx="1" fill="#5EE2C6" />
+          <rect x="26" y="22" width="14" height="4" rx="1" fill="#FFD27A" />
+          <rect x="43" y="22" width="9" height="4" rx="1" fill="#7FBEE8" />
+          <rect x="13" y="30" width="22" height="3" rx="1" fill="#5EE2C6" opacity="0.7" />
+        </>
+      )}
+      <rect x="20" y="50" width="24" height="3" rx="1" fill="#3D4D6A" />
+      <rect x="14" y="54" width="36" height="3" rx="1" fill="#3D4D6A" />
+    </svg>
+  );
+}
+
+function TileMoon() {
+  return (
+    <svg viewBox="0 0 64 64" className="size-full">
+      <circle cx="32" cy="32" r="22" fill="#0B1220" stroke="#5EE2C6" strokeWidth="2" />
+      <path
+        d="M40 14 A22 22 0 1 0 40 50 A18 18 0 1 1 40 14 Z"
+        fill="#5EE2C6"
+        opacity="0.85"
+      />
+      <circle cx="20" cy="22" r="1.5" fill="#FFD27A" />
+      <circle cx="14" cy="40" r="1" fill="#FFD27A" />
+      <circle cx="48" cy="48" r="1.2" fill="#FFD27A" />
+    </svg>
+  );
+}
+
+function TilePhone() {
+  return (
+    <svg viewBox="0 0 64 64" className="size-full">
+      <path
+        d="M14 18 L20 14 L28 22 L24 28 C26 34 30 38 36 40 L42 36 L50 44 L46 50 C32 50 14 32 14 18 Z"
+        fill="#FF6B7A"
+        opacity="0.9"
+        stroke="#FF6B7A"
+        strokeWidth="2"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -2777,6 +3079,15 @@ function IdleIcon(cls: string = "size-4") {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>
       <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
       <line x1="12" y1="2" x2="12" y2="12" />
+    </svg>
+  );
+}
+
+function TabletIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="size-4">
+      <rect x="5" y="3" width="14" height="18" rx="2" />
+      <line x1="11" y1="18" x2="13" y2="18" />
     </svg>
   );
 }

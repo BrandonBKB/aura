@@ -407,6 +407,7 @@ function FloorPlan({ state, flicker }: { state: AuraState; flicker: boolean }) {
   const isNight = state.weather === "night";
   const isStorm = state.weather === "storm";
   const isSmoky = state.weather === "smoky";
+  const isSunny = state.scenario === "sunny";
 
   const skyTop = isNight
     ? "#0A1024"
@@ -414,6 +415,8 @@ function FloorPlan({ state, flicker }: { state: AuraState; flicker: boolean }) {
     ? "#1B2433"
     : isSmoky
     ? "#3B2A1E"
+    : isSunny
+    ? "#3F8FCB"
     : "#142235";
   const skyBot = isNight
     ? "#0B1220"
@@ -421,11 +424,15 @@ function FloorPlan({ state, flicker }: { state: AuraState; flicker: boolean }) {
     ? "#0F1828"
     : isSmoky
     ? "#241710"
+    : isSunny
+    ? "#A8D4EE"
     : "#0F1A2A";
   const grass = isNight
     ? "#1A2A1F"
     : isSmoky
     ? "#2D2A1A"
+    : isSunny
+    ? "#4D7E48"
     : "#22392A";
 
   return (
@@ -463,6 +470,16 @@ function FloorPlan({ state, flicker }: { state: AuraState; flicker: boolean }) {
             <stop offset="0%" stopColor="#5EE2C6" stopOpacity="0.7" />
             <stop offset="100%" stopColor="#5EE2C6" stopOpacity="0" />
           </radialGradient>
+          <radialGradient id="sunGlow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0%" stopColor="#FFE38A" stopOpacity="0.85" />
+            <stop offset="50%" stopColor="#FFD060" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#FFD060" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id="sunWash" cx="0.85" cy="0.15" r="0.9">
+            <stop offset="0%" stopColor="#FFE38A" stopOpacity="0.35" />
+            <stop offset="60%" stopColor="#FFE38A" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="#FFE38A" stopOpacity="0" />
+          </radialGradient>
           <pattern id="poolPattern" x="0" y="0" width="14" height="14" patternUnits="userSpaceOnUse">
             <rect width="14" height="14" fill="#2C7A9C" />
             <path d="M0 7 Q3.5 4 7 7 T14 7" fill="none" stroke="#5EB6D4" strokeWidth="1.2" opacity="0.6" />
@@ -493,6 +510,50 @@ function FloorPlan({ state, flicker }: { state: AuraState; flicker: boolean }) {
             />
           ))}
         </g>
+
+        {/* Sunny: warm light wash + sun in corner */}
+        <AnimatePresence>
+          {isSunny && (
+            <motion.g
+              key="sun-layer"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.7 }}
+            >
+              <rect x="0" y="0" width="1200" height="750" fill="url(#sunWash)" />
+              <motion.g
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                style={{ transformOrigin: "1100px 70px" }}
+              >
+                <circle cx="1100" cy="70" r="80" fill="url(#sunGlow)" />
+                <circle cx="1100" cy="70" r="34" fill="#FFE38A" />
+                <circle cx="1100" cy="70" r="26" fill="#FFD060" />
+                {Array.from({ length: 8 }).map((_, i) => {
+                  const angle = (i * Math.PI) / 4;
+                  const x1 = 1100 + Math.cos(angle) * 42;
+                  const y1 = 70 + Math.sin(angle) * 42;
+                  const x2 = 1100 + Math.cos(angle) * 56;
+                  const y2 = 70 + Math.sin(angle) * 56;
+                  return (
+                    <line
+                      key={i}
+                      x1={x1}
+                      y1={y1}
+                      x2={x2}
+                      y2={y2}
+                      stroke="#FFD060"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      opacity="0.85"
+                    />
+                  );
+                })}
+              </motion.g>
+            </motion.g>
+          )}
+        </AnimatePresence>
 
         {/* Trees */}
         <Tree x={120} y={180} />
@@ -624,6 +685,8 @@ function FloorPlan({ state, flicker }: { state: AuraState; flicker: boolean }) {
           <rect x="232" y="438" width="220" height="148" rx="8" fill="none" stroke="#9A8662" strokeWidth="2" opacity="0.5" />
         </g>
         <AirPurifier x={490} y={508} speed={state.airPurifierSpeed} />
+        {/* Bedroom purifier — only kicks on when air quality is poor */}
+        <AirPurifier x={555} y={310} speed={state.airQuality === "poor" ? 3 : 0} />
 
         {/* Kitchen */}
         <g>
@@ -1203,20 +1266,24 @@ function AirPurifier({
   speed: number;
 }) {
   const dur = speed === 0 ? 0 : speed === 3 ? 0.3 : speed === 2 ? 0.7 : 1.6;
+  const accent = speed === 0 ? "#3D4D6A" : "#5EE2C6";
+  const bladeOpacity = speed === 0 ? 0.25 : 0.65;
+  const indicatorFill = speed >= 2 ? "#5EE2C6" : speed === 1 ? "#A89870" : "#3D4D6A";
   return (
     <g transform={`translate(${x},${y})`}>
-      <rect x="0" y="0" width="36" height="64" rx="8" fill="#1F2A40" stroke="#5EE2C6" strokeWidth="1.2" />
-      <line x1="6" y1="48" x2="30" y2="48" stroke="#5EE2C6" strokeWidth="0.6" />
-      <line x1="6" y1="52" x2="30" y2="52" stroke="#5EE2C6" strokeWidth="0.6" />
-      <line x1="6" y1="56" x2="30" y2="56" stroke="#5EE2C6" strokeWidth="0.6" />
+      <rect x="0" y="0" width="36" height="64" rx="8" fill="#1F2A40" stroke={accent} strokeWidth="1.2" />
+      <line x1="6" y1="48" x2="30" y2="48" stroke={accent} strokeWidth="0.6" />
+      <line x1="6" y1="52" x2="30" y2="52" stroke={accent} strokeWidth="0.6" />
+      <line x1="6" y1="56" x2="30" y2="56" stroke={accent} strokeWidth="0.6" />
+      <circle cx="30" cy="60" r="1.8" fill={indicatorFill} />
       <motion.g
         animate={dur > 0 ? { rotate: 360 } : { rotate: 0 }}
         transition={dur > 0 ? { duration: dur, repeat: Infinity, ease: "linear" } : {}}
         style={{ transformOrigin: "18px 22px" }}
       >
-        <circle cx="18" cy="22" r="14" fill="none" stroke="#5EE2C6" strokeWidth="1" opacity="0.6" />
-        <path d="M18 22 L18 8 A14 14 0 0 1 30 28 Z" fill="#5EE2C6" opacity="0.65" />
-        <path d="M18 22 L18 36 A14 14 0 0 1 6 16 Z" fill="#5EE2C6" opacity="0.65" />
+        <circle cx="18" cy="22" r="14" fill="none" stroke={accent} strokeWidth="1" opacity="0.6" />
+        <path d="M18 22 L18 8 A14 14 0 0 1 30 28 Z" fill={accent} opacity={bladeOpacity} />
+        <path d="M18 22 L18 36 A14 14 0 0 1 6 16 Z" fill={accent} opacity={bladeOpacity} />
         <circle cx="18" cy="22" r="3" fill="#0B1220" />
       </motion.g>
     </g>

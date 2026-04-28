@@ -40,6 +40,11 @@ type AuraState = {
   thermostatF: number;
   airPurifierSpeed: number; // 0..3
   tvOn: boolean;
+  doorLocked: boolean;
+  garageOpen: boolean;
+  alarmArmed: boolean;
+  vacuumActive: boolean;
+  outlets: { kitchen: boolean; bedroom: boolean; garage: boolean };
   toast: string | null;
 };
 
@@ -60,6 +65,11 @@ const RESET_STATE: AuraState = {
   thermostatF: 72,
   airPurifierSpeed: 1,
   tvOn: true,
+  doorLocked: true,
+  garageOpen: false,
+  alarmArmed: false,
+  vacuumActive: false,
+  outlets: { kitchen: true, bedroom: true, garage: false },
   toast: null,
 };
 
@@ -238,6 +248,7 @@ export default function Page() {
   const [state, setState] = useState<AuraState>(RESET_STATE);
   const [flicker, setFlicker] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [viewTab, setViewTab] = useState<"floorplan" | "devices">("floorplan");
 
   function runScenario(id: ScenarioId) {
     if (id === "reset") {
@@ -269,9 +280,15 @@ export default function Page() {
     <main className="flex flex-col h-screen w-full overflow-hidden">
       <TopBar state={state} onOpenPanel={() => setPanelOpen(true)} />
 
+      <ViewTabs active={viewTab} onPick={setViewTab} />
+
       <section className="flex-1 min-h-0 flex items-center justify-center px-4 sm:px-8 py-4">
         <div className="w-full h-full max-w-[1400px] flex items-center justify-center">
-          <FloorPlan state={state} flicker={flicker} />
+          {viewTab === "floorplan" ? (
+            <FloorPlan state={state} flicker={flicker} />
+          ) : (
+            <DevicesView state={state} setState={setState} />
+          )}
         </div>
       </section>
 
@@ -1438,6 +1455,341 @@ function Tree({ x, y, small }: { x: number; y: number; small?: boolean }) {
   );
 }
 
+// ---------- View tabs + devices view ----------------------------------------
+
+function ViewTabs({
+  active,
+  onPick,
+}: {
+  active: "floorplan" | "devices";
+  onPick: (v: "floorplan" | "devices") => void;
+}) {
+  const tabs: { id: "floorplan" | "devices"; label: string }[] = [
+    { id: "floorplan", label: "Floor Plan" },
+    { id: "devices", label: "Devices" },
+  ];
+  return (
+    <nav className="px-4 sm:px-6 border-b border-[#1F2A40] bg-[#0B1220]/60">
+      <div className="flex gap-1 max-w-[1400px] mx-auto">
+        {tabs.map((t) => {
+          const isActive = active === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => onPick(t.id)}
+              className={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
+                isActive ? "text-[#5EE2C6]" : "text-[#8A98B3] hover:text-[#E6ECF5]"
+              }`}
+            >
+              {t.label}
+              {isActive && (
+                <motion.span
+                  layoutId="tab-underline"
+                  className="absolute left-2 right-2 -bottom-px h-[2px] bg-[#5EE2C6] rounded-full"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function DevicesView({
+  state,
+  setState,
+}: {
+  state: AuraState;
+  setState: React.Dispatch<React.SetStateAction<AuraState>>;
+}) {
+  return (
+    <div className="w-full h-full overflow-y-auto py-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-w-[1400px] mx-auto">
+        <CategorySection title="Climate" summary={`${state.thermostatF}°F`}>
+          <DeviceRow
+            label="Whole Home"
+            badge={state.thermostatF >= 74 ? "Cooling" : state.thermostatF >= 68 ? "Comfort" : "Eco"}
+            value={`${state.thermostatF}°F`}
+          >
+            <RowAdjust
+              onMinus={() =>
+                setState((s) => ({ ...s, thermostatF: Math.max(60, s.thermostatF - 1) }))
+              }
+              onPlus={() =>
+                setState((s) => ({ ...s, thermostatF: Math.min(85, s.thermostatF + 1) }))
+              }
+            />
+          </DeviceRow>
+        </CategorySection>
+
+        <CategorySection title="Lights" summary={`${state.lightsBrightness}%`}>
+          <DeviceRow
+            label="All Rooms"
+            badge={state.lightsBrightness === 0 ? "Off" : "On"}
+            value={`${state.lightsBrightness}%`}
+          >
+            <RowAdjust
+              onMinus={() =>
+                setState((s) => ({
+                  ...s,
+                  lightsBrightness: Math.max(0, s.lightsBrightness - 10),
+                }))
+              }
+              onPlus={() =>
+                setState((s) => ({
+                  ...s,
+                  lightsBrightness: Math.min(100, s.lightsBrightness + 10),
+                }))
+              }
+            />
+          </DeviceRow>
+          <DeviceRow
+            label="Exterior"
+            badge={state.exteriorLights ? "On" : "Off"}
+            value={state.exteriorLights ? "Floods" : "—"}
+          >
+            <PanelToggle
+              on={state.exteriorLights}
+              onClick={() => setState((s) => ({ ...s, exteriorLights: !s.exteriorLights }))}
+            />
+          </DeviceRow>
+        </CategorySection>
+
+        <CategorySection
+          title="Shades"
+          summary={state.blindsClosed ? "Closed" : "Open"}
+        >
+          <DeviceRow
+            label="All Windows"
+            badge={state.blindsClosed ? "Closed" : "Open"}
+            value="10 windows"
+          >
+            <PanelToggle
+              on={!state.blindsClosed}
+              onClick={() => setState((s) => ({ ...s, blindsClosed: !s.blindsClosed }))}
+            />
+          </DeviceRow>
+        </CategorySection>
+
+        <CategorySection title="Entertainment" summary={state.tvOn ? "On" : "Off"}>
+          <DeviceRow
+            label="Living Room TV"
+            badge={state.tvOn ? "Streaming" : "Off"}
+            value={state.tvOn ? "65″ Display" : "Off"}
+          >
+            <PanelToggle
+              on={state.tvOn}
+              onClick={() => setState((s) => ({ ...s, tvOn: !s.tvOn }))}
+            />
+          </DeviceRow>
+          <DeviceRow label="Speakers" badge="Idle" value="Whole-home" muted>
+            <PanelToggle on={false} onClick={() => undefined} />
+          </DeviceRow>
+        </CategorySection>
+
+        <CategorySection title="Cameras" summary="Recording">
+          <DeviceRow label="Front Door" badge="Recording" value="1080p · Clear" />
+          <DeviceRow label="Backyard" badge="Recording" value="1080p · Clear" />
+          <DeviceRow label="Driveway" badge="Motion 2m ago" value="1080p · Clear" muted />
+        </CategorySection>
+
+        <CategorySection
+          title="Safety & Access"
+          summary={state.alarmArmed ? "Armed" : "Disarmed"}
+        >
+          <DeviceRow
+            label="Front Door Lock"
+            badge={state.doorLocked ? "Locked" : "Unlocked"}
+            value="Last opened 2:08 PM"
+            amber={!state.doorLocked}
+          >
+            <PanelToggle
+              on={state.doorLocked}
+              onClick={() => setState((s) => ({ ...s, doorLocked: !s.doorLocked }))}
+            />
+          </DeviceRow>
+          <DeviceRow
+            label="Garage"
+            badge={state.garageOpen ? "Open" : "Closed"}
+            value={state.garageOpen ? "Opened 12 min ago" : "Secure"}
+            amber={state.garageOpen}
+          >
+            <PanelToggle
+              on={state.garageOpen}
+              onClick={() => setState((s) => ({ ...s, garageOpen: !s.garageOpen }))}
+            />
+          </DeviceRow>
+          <DeviceRow
+            label="Alarm"
+            badge={state.alarmArmed ? "Armed (Stay)" : "Disarmed"}
+            value={state.alarmArmed ? "All zones active" : "Idle"}
+          >
+            <PanelToggle
+              on={state.alarmArmed}
+              onClick={() => setState((s) => ({ ...s, alarmArmed: !s.alarmArmed }))}
+            />
+          </DeviceRow>
+        </CategorySection>
+
+        <CategorySection
+          title="Robot Vacuum"
+          summary={state.vacuumActive ? "Cleaning" : "Idle"}
+        >
+          <DeviceRow
+            label="Roomie"
+            badge={state.vacuumActive ? "Cleaning" : "Docked"}
+            value={state.vacuumActive ? "Living Room" : "Battery 100%"}
+          >
+            <button
+              onClick={() => setState((s) => ({ ...s, vacuumActive: !s.vacuumActive }))}
+              className="px-3 py-1.5 rounded-lg border border-[#1F2A40] bg-[#0B1220] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] text-xs font-medium transition-colors"
+            >
+              {state.vacuumActive ? "Stop" : "Start"}
+            </button>
+          </DeviceRow>
+        </CategorySection>
+
+        <CategorySection title="Smart Outlets" summary={`${countOutlets(state)} on`}>
+          <DeviceRow
+            label="Kitchen Outlet"
+            badge={state.outlets.kitchen ? "On" : "Off"}
+            value={state.outlets.kitchen ? "42 W" : "0 W"}
+          >
+            <PanelToggle
+              on={state.outlets.kitchen}
+              onClick={() =>
+                setState((s) => ({
+                  ...s,
+                  outlets: { ...s.outlets, kitchen: !s.outlets.kitchen },
+                }))
+              }
+            />
+          </DeviceRow>
+          <DeviceRow
+            label="Bedroom Outlet"
+            badge={state.outlets.bedroom ? "On" : "Off"}
+            value={state.outlets.bedroom ? "18 W" : "0 W"}
+          >
+            <PanelToggle
+              on={state.outlets.bedroom}
+              onClick={() =>
+                setState((s) => ({
+                  ...s,
+                  outlets: { ...s.outlets, bedroom: !s.outlets.bedroom },
+                }))
+              }
+            />
+          </DeviceRow>
+          <DeviceRow
+            label="Garage Outlet"
+            badge={state.outlets.garage ? "On" : "Off"}
+            value={state.outlets.garage ? "9 W" : "0 W"}
+          >
+            <PanelToggle
+              on={state.outlets.garage}
+              onClick={() =>
+                setState((s) => ({
+                  ...s,
+                  outlets: { ...s.outlets, garage: !s.outlets.garage },
+                }))
+              }
+            />
+          </DeviceRow>
+        </CategorySection>
+      </div>
+    </div>
+  );
+}
+
+function countOutlets(s: AuraState) {
+  return Number(s.outlets.kitchen) + Number(s.outlets.bedroom) + Number(s.outlets.garage);
+}
+
+function CategorySection({
+  title,
+  summary,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-[#1F2A40] bg-[#0F1A30]/60 overflow-hidden">
+      <header className="px-4 py-2.5 flex items-center justify-between border-b border-[#1F2A40]">
+        <h3 className="text-xs uppercase tracking-wider font-semibold text-[#E6ECF5]">
+          {title}
+        </h3>
+        {summary && <span className="text-xs text-[#5EE2C6]">{summary}</span>}
+      </header>
+      <div className="divide-y divide-[#1F2A40]">{children}</div>
+    </section>
+  );
+}
+
+function DeviceRow({
+  label,
+  value,
+  badge,
+  amber,
+  muted,
+  children,
+}: {
+  label: string;
+  value: string;
+  badge?: string;
+  amber?: boolean;
+  muted?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`px-4 py-3 flex items-center justify-between gap-3 ${
+        muted ? "opacity-60" : ""
+      }`}
+    >
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-[#E6ECF5] truncate">{label}</div>
+        <div className="flex items-center gap-2 mt-0.5">
+          {badge && (
+            <span
+              className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                amber
+                  ? "bg-[#1A1408] text-[#F5B544] border border-[#3A2E18]"
+                  : "bg-[#0B1220] text-[#8A98B3] border border-[#1F2A40]"
+              }`}
+            >
+              {badge}
+            </span>
+          )}
+          <span className="text-xs text-[#8A98B3] truncate">{value}</span>
+        </div>
+      </div>
+      {children && <div className="shrink-0">{children}</div>}
+    </div>
+  );
+}
+
+function RowAdjust({ onMinus, onPlus }: { onMinus: () => void; onPlus: () => void }) {
+  return (
+    <div className="flex gap-1.5">
+      <button
+        onClick={onMinus}
+        className="size-8 rounded-lg border border-[#1F2A40] bg-[#0B1220] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] transition-colors text-sm font-medium"
+      >
+        −
+      </button>
+      <button
+        onClick={onPlus}
+        className="size-8 rounded-lg border border-[#1F2A40] bg-[#0B1220] text-[#5EE2C6] hover:border-[#5EE2C6] hover:bg-[#142042] transition-colors text-sm font-medium"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
 // ---------- Device panel + voice chat ---------------------------------------
 
 function DevicePanel({
@@ -1946,6 +2298,46 @@ function parseCommand(
   if (/cooler|cool down|too hot/.test(t)) {
     setState((s) => ({ ...s, thermostatF: Math.max(60, s.thermostatF - 2) }));
     return "Cooling 2°F.";
+  }
+
+  // Lock / unlock door
+  if (/(lock|secure).*(door|front door)|lock up/.test(t)) {
+    setState((s) => ({ ...s, doorLocked: true }));
+    return "Front door locked.";
+  }
+  if (/unlock.*(door|front door)/.test(t)) {
+    setState((s) => ({ ...s, doorLocked: false }));
+    return "Front door unlocked.";
+  }
+
+  // Garage
+  if (/(close|shut).*garage/.test(t)) {
+    setState((s) => ({ ...s, garageOpen: false }));
+    return "Garage closed.";
+  }
+  if (/open.*garage/.test(t)) {
+    setState((s) => ({ ...s, garageOpen: true }));
+    return "Garage opening.";
+  }
+
+  // Alarm
+  if (/arm.*alarm|set alarm|enable alarm/.test(t)) {
+    setState((s) => ({ ...s, alarmArmed: true }));
+    return "Alarm armed.";
+  }
+  if (/disarm.*alarm|alarm off|disable alarm/.test(t)) {
+    setState((s) => ({ ...s, alarmArmed: false }));
+    return "Alarm disarmed.";
+  }
+
+  // Vacuum
+  if (/(start|run).*(vacuum|roomie|cleaning)/.test(t)) {
+    setState((s) => ({ ...s, vacuumActive: true }));
+    return "Starting vacuum.";
+  }
+  if (/(stop|pause|dock).*(vacuum|roomie|cleaning)/.test(t)) {
+    setState((s) => ({ ...s, vacuumActive: false }));
+    return "Vacuum stopping.";
   }
 
   return "Sorry, I didn't catch that. Try 'lights off', 'goodnight', or 'sunny mode'.";

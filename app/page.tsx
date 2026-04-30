@@ -25,6 +25,14 @@ type Weather = "clear" | "storm" | "smoky" | "night";
 type AirQuality = "good" | "poor";
 type WaterStatus = "flowing" | "off" | "leak";
 
+type Recommendation = {
+  title: string;
+  savings: string;
+  input: string;
+  plan: string;
+  control: string;
+};
+
 type AuraState = {
   scenario: ScenarioId;
   weather: Weather;
@@ -50,6 +58,7 @@ type AuraState = {
   personPresent: boolean;
   personWalking: boolean;
   toast: string | null;
+  recommendation: Recommendation | null;
 };
 
 const RESET_STATE: AuraState = {
@@ -77,6 +86,13 @@ const RESET_STATE: AuraState = {
   personPresent: true,
   personWalking: false,
   toast: null,
+  recommendation: {
+    title: "Pre-cool studio before 5 PM",
+    savings: "Save $0.61",
+    input: "Studio occupied, peak pricing in 32 min.",
+    plan: "Drop studio to 71°F, ramp HVAC down before peak.",
+    control: "Comfort change — AURA asks before acting.",
+  },
 };
 
 const SCENARIOS: Record<
@@ -369,8 +385,28 @@ export default function Page() {
     return () => window.clearInterval(id);
   }, []);
 
+  const handleApproveRec = () => {
+    setState((s) => ({
+      ...s,
+      recommendation: null,
+      toast: "AURA: applying recommendation.",
+    }));
+    scheduleToastClear();
+  };
+  const handleDismissRec = () =>
+    setState((s) => ({ ...s, recommendation: null }));
+
   return (
-    <IPadFrame on={ipadMode}>
+    <IPadFrame
+      on={ipadMode}
+      sidebar={
+        <RecommendationCard
+          rec={state.recommendation}
+          onApprove={handleApproveRec}
+          onDismiss={handleDismissRec}
+        />
+      }
+    >
       <main className="flex flex-col h-full w-full overflow-hidden bg-[#0B1220]">
         <TopBar
           state={state}
@@ -424,8 +460,80 @@ export default function Page() {
             </motion.div>
           )}
         </AnimatePresence>
+
       </main>
     </IPadFrame>
+  );
+}
+
+// ---------- AURA Recommends card -------------------------------------------
+
+function RecommendationCard({
+  rec,
+  onApprove,
+  onDismiss,
+}: {
+  rec: Recommendation | null;
+  onApprove: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {rec && (
+        <motion.div
+          key={rec.title}
+          initial={{ opacity: 0, y: 16, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 16, scale: 0.98 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+          className="w-full rounded-2xl bg-[#0F1A30]/95 border border-[#1F2A40] backdrop-blur shadow-2xl p-4 sm:p-5"
+        >
+          <div className="text-[11px] font-semibold tracking-[0.18em] text-[#5EE2C6] mb-2">
+            AURA RECOMMENDS
+          </div>
+          <div className="text-base sm:text-lg font-semibold leading-snug mb-2">
+            {rec.title}
+          </div>
+          <div className="text-sm font-medium text-[#5EE2C6] mb-4">
+            {rec.savings}
+          </div>
+          <div className="space-y-3 text-[12px] leading-snug mb-4">
+            <div>
+              <div className="text-[10px] font-semibold tracking-[0.16em] text-[#8A98B3] mb-0.5">
+                INPUT
+              </div>
+              <div className="text-[#D6DEEC]">{rec.input}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold tracking-[0.16em] text-[#8A98B3] mb-0.5">
+                PLAN
+              </div>
+              <div className="text-[#D6DEEC]">{rec.plan}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-semibold tracking-[0.16em] text-[#8A98B3] mb-0.5">
+                CONTROL
+              </div>
+              <div className="text-[#D6DEEC]">{rec.control}</div>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={onApprove}
+              className="flex-1 px-3 py-2 rounded-lg text-sm font-semibold bg-[#5EE2C6] text-[#0B1220] hover:bg-[#7BEAD3] transition-colors"
+            >
+              Approve
+            </button>
+            <button
+              onClick={onDismiss}
+              className="flex-1 px-3 py-2 rounded-lg text-sm font-medium bg-[#1A2740] text-[#D6DEEC] border border-[#2A3A5C] hover:bg-[#243153] transition-colors"
+            >
+              Dismiss
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -1728,14 +1836,31 @@ function Tree({ x, y, small }: { x: number; y: number; small?: boolean }) {
 
 // ---------- iPad frame wrapper ----------------------------------------------
 
-function IPadFrame({ on, children }: { on: boolean; children: React.ReactNode }) {
+function IPadFrame({
+  on,
+  children,
+  sidebar,
+}: {
+  on: boolean;
+  children: React.ReactNode;
+  sidebar?: React.ReactNode;
+}) {
   if (!on) {
-    return <div className="h-screen w-full">{children}</div>;
+    return (
+      <div className="h-screen w-full relative">
+        {children}
+        {sidebar && (
+          <div className="fixed top-20 right-3 sm:right-6 z-40 w-[300px] sm:w-[340px] max-w-[calc(100vw-1.5rem)]">
+            {sidebar}
+          </div>
+        )}
+      </div>
+    );
   }
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-[#1A2236] via-[#0E1828] to-[#1A2236] flex items-center justify-center p-4 sm:p-8">
+    <div className="min-h-screen w-full bg-gradient-to-br from-[#1A2236] via-[#0E1828] to-[#1A2236] flex items-center justify-center gap-4 sm:gap-6 p-4 sm:p-8">
       <div
-        className="relative bg-[#0F141E] rounded-[44px] p-3 sm:p-4 shadow-[0_30px_80px_rgba(0,0,0,0.6)] border border-[#1F2A40]"
+        className="relative bg-[#0F141E] rounded-[44px] p-3 sm:p-4 shadow-[0_30px_80px_rgba(0,0,0,0.6)] border border-[#1F2A40] shrink"
         style={{
           width: "min(100%, 1400px)",
           aspectRatio: "16 / 10",
@@ -1754,6 +1879,9 @@ function IPadFrame({ on, children }: { on: boolean; children: React.ReactNode })
         {/* Home indicator pill */}
         <div className="absolute bottom-1.5 sm:bottom-2 left-1/2 -translate-x-1/2 w-20 h-[3px] rounded-full bg-[#3D4D6A]" />
       </div>
+      {sidebar && (
+        <div className="hidden lg:block w-[340px] shrink-0">{sidebar}</div>
+      )}
     </div>
   );
 }
